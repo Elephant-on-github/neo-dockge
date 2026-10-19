@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { Stack } from "./stack";
-import { CREATED_STACK, EXITED, RUNNING, UNKNOWN } from "../common/util-common";
+import { CREATED_STACK, DEGRADED, EXITED, RUNNING, UNKNOWN, statusColor, statusName, statusNameShort } from "../common/util-common";
 import { DockgeServer } from "./dockge-server";
 import childProcessAsync from "promisify-child-process";
 import fs from "fs";
@@ -57,6 +57,43 @@ describe("Stack.statusConvert", () => {
     it("keeps parity for paused/dead-only stacks", () => {
         expect(Stack.statusConvert("dead(1)")).toBe(UNKNOWN);
         expect(Stack.statusConvert("paused(1)")).toBe(UNKNOWN);
+    });
+});
+
+// F1 (spec 2026-10-19-f1-degraded-status): nonzero-exit / restarting / dead
+// containers next to living ones surface as DEGRADED. Warn flags carry only
+// the docker-ps-sourced nonzeroExit; restarting/dead arrive as compose-ls
+// count segments.
+describe("statusConvert with warn flags", () => {
+    it("flags a living stack with a crashed sibling as DEGRADED", () => {
+        expect(Stack.statusConvert("running(2)", { nonzeroExit: true })).toBe(DEGRADED);
+        expect(Stack.statusConvert("exited(1), running(2)", { nonzeroExit: true })).toBe(DEGRADED);
+    });
+
+    it("keeps R1: no warn flags means running wins as before", () => {
+        expect(Stack.statusConvert("exited(1), running(2)")).toBe(RUNNING);
+        expect(Stack.statusConvert("running(2)", { nonzeroExit: false })).toBe(RUNNING);
+    });
+
+    it("restarting/dead count segments warn without docker ps", () => {
+        expect(Stack.statusConvert("restarting(1), running(1)")).toBe(DEGRADED);
+        expect(Stack.statusConvert("dead(1), running(1)")).toBe(DEGRADED);
+        expect(Stack.statusConvert("restarting(2)")).toBe(DEGRADED);
+        expect(Stack.statusConvert("exited(1), restarting(1)")).toBe(DEGRADED);
+    });
+
+    it("does not degrade a fully exited stack", () => {
+        expect(Stack.statusConvert("exited(3)", { nonzeroExit: true })).toBe(EXITED);
+    });
+
+    it("ignores garbage warn values", () => {
+        expect(Stack.statusConvert("running(2)", { nonzeroExit: "yes" as unknown as boolean })).toBe(RUNNING);
+    });
+
+    it("exposes DEGRADED through the shared status helpers", () => {
+        expect(statusName(DEGRADED)).toBe("degraded");
+        expect(statusNameShort(DEGRADED)).toBe("degraded");
+        expect(statusColor(DEGRADED)).toBe("warning");
     });
 });
 

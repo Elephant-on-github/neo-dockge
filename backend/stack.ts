@@ -10,6 +10,7 @@ import {
     COMBINED_TERMINAL_ROWS,
     CREATED_FILE,
     CREATED_STACK,
+    DEGRADED,
     EXITED, getCombinedTerminalName,
     getComposeTerminalName, getContainerExecTerminalName,
     PROGRESS_TERMINAL_ROWS,
@@ -463,9 +464,15 @@ export class Stack {
      * Count-based and order-independent (R1): any running container wins, so
      * one-shot/exited sidecars never make a live stack look exited (GH #177/#474/#606/#806).
      * Non-string or unparseable input yields UNKNOWN instead of throwing (#875).
+     *
+     * F1 (spec 2026-10-19-f1-degraded-status): `warn` carries docker-ps-sourced
+     * facts (a sibling container exited with a nonzero code). Combined with the
+     * compose-ls `restarting`/`dead` segments this surfaces a living-but-crashing
+     * stack as DEGRADED; a one-shot exiting 0 stays plain RUNNING (R1 intact).
      * @param status
+     * @param warn
      */
-    static statusConvert(status : string) : number {
+    static statusConvert(status : string, warn? : { nonzeroExit?: boolean }) : number {
         if (typeof status !== "string") {
             return UNKNOWN;
         }
@@ -484,7 +491,14 @@ export class Stack {
         }
 
         if ((counts.get("running") ?? 0) > 0) {
+            if (warn?.nonzeroExit === true || (counts.get("restarting") ?? 0) > 0 || (counts.get("dead") ?? 0) > 0) {
+                return DEGRADED;
+            }
             return RUNNING;
+        }
+        if ((counts.get("restarting") ?? 0) > 0) {
+            // A whole stack in a restart loop is not cleanly exited either.
+            return DEGRADED;
         }
         if ((counts.get("exited") ?? 0) > 0) {
             return EXITED;
