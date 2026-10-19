@@ -51,6 +51,7 @@ export const CREATED_FILE = 1;
 export const CREATED_STACK = 2;
 export const RUNNING = 3;
 export const EXITED = 4;
+export const DEGRADED = 5;
 
 export function statusName(status : number) : string {
     switch (status) {
@@ -62,6 +63,8 @@ export function statusName(status : number) : string {
             return "running";
         case EXITED:
             return "exited";
+        case DEGRADED:
+            return "degraded";
         default:
             return "unknown";
     }
@@ -77,6 +80,8 @@ export function statusNameShort(status : number) : string {
             return "active";
         case EXITED:
             return "exited";
+        case DEGRADED:
+            return "degraded";
         default:
             return "?";
     }
@@ -92,6 +97,8 @@ export function statusColor(status : number) : string {
             return "primary";
         case EXITED:
             return "danger";
+        case DEGRADED:
+            return "warning";
         default:
             return "secondary";
     }

@@ -10,6 +10,7 @@ import {
     COMBINED_TERMINAL_ROWS,
     CREATED_FILE,
     CREATED_STACK,
+    DEGRADED,
     EXITED, getCombinedTerminalName,
     getComposeTerminalName, getContainerExecTerminalName,
     PROGRESS_TERMINAL_ROWS,
@@ -339,6 +340,10 @@ export class Stack {
                 throw new Error("Unexpected docker compose ls output");
             }
 
+            // F1: crash warnings come from one extra global docker ps, strictly
+            // after the compose-ls spawn; getContainerWarnings never rejects (R3).
+            const warnings = await this.getContainerWarnings();
+
             for (let composeStack of composeList) {
                 try {
                     let stack = stackList.get(composeStack.Name);
@@ -362,7 +367,7 @@ export class Stack {
                         stackList.set(composeStack.Name, stack);
                     }
 
-                    stack._status = this.statusConvert(composeStack.Status);
+                    stack._status = this.statusConvert(composeStack.Status, warnings.get(composeStack.Name));
                     stack._configFilePath = composeStack.ConfigFiles;
                 } catch (e) {
                     // One malformed entry must not blank the list: log and keep the siblings.
@@ -405,13 +410,33 @@ export class Stack {
                 return statusList;
             }
 
+            const entries : { name : string, statusString : string, configFiles : string }[] = [];
             for (let composeStack of composeList) {
                 try {
-                    const status = this.statusConvert(composeStack.Status);
-                    statusList.set(composeStack.Name, status);
+                    entries.push({
+                        name: composeStack.Name,
+                        statusString: composeStack.Status,
+                        configFiles: composeStack.ConfigFiles,
+                    });
+                } catch (e) {
+                    if (e instanceof Error) {
+                        log.warn("getStatusList", `Failed to process a compose ls entry, error: ${e.message}`);
+                    }
+                }
+            }
+
+            // F1: one extra global docker ps after the compose-ls spawn
+            // (spawn order matters for the mocked tests and for the CLI call
+            // budget); getContainerWarnings never rejects (R3).
+            const warnings = await this.getContainerWarnings();
+
+            for (let entry of entries) {
+                try {
+                    const status = this.statusConvert(entry.statusString, warnings.get(entry.name));
+                    statusList.set(entry.name, status);
                     if (stacksDir) {
-                        const folder = this.resolveManagedFolder(stacksDir, composeStack.ConfigFiles);
-                        if (folder && folder !== composeStack.Name) {
+                        const folder = this.resolveManagedFolder(stacksDir, entry.configFiles);
+                        if (folder && folder !== entry.name) {
                             statusList.set(folder, status);
                         }
                     }
@@ -463,9 +488,15 @@ export class Stack {
      * Count-based and order-independent (R1): any running container wins, so
      * one-shot/exited sidecars never make a live stack look exited (GH #177/#474/#606/#806).
      * Non-string or unparseable input yields UNKNOWN instead of throwing (#875).
+     *
+     * F1 (spec 2026-10-19-f1-degraded-status): `warn` carries docker-ps-sourced
+     * facts (a sibling container exited with a nonzero code). Combined with the
+     * compose-ls `restarting`/`dead` segments this surfaces a living-but-crashing
+     * stack as DEGRADED; a one-shot exiting 0 stays plain RUNNING (R1 intact).
      * @param status
+     * @param warn
      */
-    static statusConvert(status : string) : number {
+    static statusConvert(status : string, warn? : { nonzeroExit?: boolean }) : number {
         if (typeof status !== "string") {
             return UNKNOWN;
         }
@@ -484,7 +515,14 @@ export class Stack {
         }
 
         if ((counts.get("running") ?? 0) > 0) {
+            if (warn?.nonzeroExit === true || (counts.get("restarting") ?? 0) > 0 || (counts.get("dead") ?? 0) > 0) {
+                return DEGRADED;
+            }
             return RUNNING;
+        }
+        if ((counts.get("restarting") ?? 0) > 0) {
+            // A whole stack in a restart loop is not cleanly exited either.
+            return DEGRADED;
         }
         if ((counts.get("exited") ?? 0) > 0) {
             return EXITED;
@@ -493,6 +531,64 @@ export class Stack {
             return CREATED_STACK;
         }
         return UNKNOWN;
+    }
+
+    /**
+     * Parse `docker ps -a --format '{{json .}}'` NDJSON output into per
+     * compose-project crash flags (F1, spec 2026-10-19-f1-degraded-status).
+     *
+     * `Labels` is a comma-joined string, not an object; the project value is
+     * extracted with a first-'=' split (other label values may contain '=').
+     * Per-line parse failures are skipped; an unparseable exit code in
+     * `Status` conservatively contributes no warning.
+     * @param output
+     */
+    static parseContainerWarnings(output : string | undefined) : Map<string, { nonzeroExit: boolean }> {
+        const warnings = new Map<string, { nonzeroExit: boolean }>();
+        if (typeof output !== "string") {
+            return warnings;
+        }
+        for (const line of output.split("\n")) {
+            if (!line.trim()) {
+                continue;
+            }
+            let obj : { State? : string, Status? : string, Labels? : string };
+            try {
+                obj = JSON.parse(line);
+            } catch {
+                continue;
+            }
+            if (typeof obj.Labels !== "string") {
+                continue;
+            }
+            const projectEntry = obj.Labels.split(",").find((entry) => entry.startsWith("com.docker.compose.project="));
+            if (!projectEntry) {
+                continue;
+            }
+            const project = projectEntry.slice(projectEntry.indexOf("=") + 1);
+            const codeMatch = (obj.Status ?? "").match(/^(?:Exited|Restarting|Dead)\s*\((\d+)\)/);
+            const nonzeroExit = (obj.State === "exited" || obj.State === "restarting") && codeMatch !== null && Number(codeMatch[1]) > 0;
+            const existing = warnings.get(project);
+            warnings.set(project, { nonzeroExit: (existing?.nonzeroExit ?? false) || nonzeroExit });
+        }
+        return warnings;
+    }
+
+    /**
+     * One global `docker ps -a` (compose-managed containers only) feeds the
+     * per-stack nonzeroExit warn flags. Never rejects (R3): spawn failure or
+     * a malformed result yields an empty map, i.e. today's behavior.
+     */
+    static async getContainerWarnings() : Promise<Map<string, { nonzeroExit: boolean }>> {
+        try {
+            const res = await childProcessAsync.spawn("docker", [ "ps", "-a", "--filter", "label=com.docker.compose.project", "--format", "{{json .}}" ], {
+                encoding: "utf-8",
+            });
+            return this.parseContainerWarnings(res?.stdout?.toString());
+        } catch (e) {
+            log.warn("getContainerWarnings", `Failed to list containers: ${(e as Error).message}`);
+            return new Map();
+        }
     }
 
     static async getStack(server: DockgeServer, stackName: string, skipFSOperations = false) : Promise<Stack> {
@@ -585,10 +681,10 @@ export class Stack {
             throw new Error("Failed to pull, please check the terminal output for more information.");
         }
 
-        // If the stack is not running, we don't need to restart it
+        // If the stack is not running (and not degraded), we don't need to restart it
         await this.updateStatus();
         log.debug("update", "Status: " + this.status);
-        if (this.status !== RUNNING) {
+        if (this.status !== RUNNING && this.status !== DEGRADED) {
             return exitCode;
         }
 
@@ -632,7 +728,7 @@ export class Stack {
     }
 
     async getServiceStatusList() {
-        let statusList = new Map<string, Array<object>>();
+        let statusList = new Map<string, Array<{ status: string, name: string }>>();
 
         try {
             let res = await childProcessAsync.spawn("docker", this.getComposeOptions("ps", "--format", "json"), {
@@ -646,12 +742,19 @@ export class Stack {
 
             let lines = res.stdout?.toString().split("\n");
 
-            const addLine = (obj: { Service: string, State: string, Name: string, Health: string }) => {
+            const addLine = (obj: { Service: string, State: string, Name: string, Health: string, ExitCode?: number }) => {
                 if (!statusList.has(obj.Service)) {
                     statusList.set(obj.Service, []);
                 }
+                let status = obj.Health || obj.State;
+                // F1: suffix nonzero exit codes on crashed/restarting service badges.
+                // Health precedence: a healthchecked container stays "unhealthy" (no
+                // suffix). Missing ExitCode (old compose) or exit 0 → no suffix.
+                if ((status === "exited" || status === "restarting") && typeof obj.ExitCode === "number" && obj.ExitCode !== 0) {
+                    status = `${status} (${obj.ExitCode})`;
+                }
                 statusList.get(obj.Service)?.push({
-                    status: obj.Health || obj.State,
+                    status,
                     name: obj.Name
                 });
             };
