@@ -19,7 +19,6 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write # enable write permissions for pull request comments
 
 # Docs-only or code pushes that touch no json/yaml no longer queue this run;
 # superseded runs cancel.
@@ -32,6 +31,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: json-yaml-validate
         id: json-yaml-validate
