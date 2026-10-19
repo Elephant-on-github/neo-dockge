@@ -509,6 +509,64 @@ export class Stack {
         return UNKNOWN;
     }
 
+    /**
+     * Parse `docker ps -a --format '{{json .}}'` NDJSON output into per
+     * compose-project crash flags (F1, spec 2026-10-19-f1-degraded-status).
+     *
+     * `Labels` is a comma-joined string, not an object; the project value is
+     * extracted with a first-'=' split (other label values may contain '=').
+     * Per-line parse failures are skipped; an unparseable exit code in
+     * `Status` conservatively contributes no warning.
+     * @param output
+     */
+    static parseContainerWarnings(output : string | undefined) : Map<string, { nonzeroExit: boolean }> {
+        const warnings = new Map<string, { nonzeroExit: boolean }>();
+        if (typeof output !== "string") {
+            return warnings;
+        }
+        for (const line of output.split("\n")) {
+            if (!line.trim()) {
+                continue;
+            }
+            let obj : { State? : string, Status? : string, Labels? : string };
+            try {
+                obj = JSON.parse(line);
+            } catch {
+                continue;
+            }
+            if (typeof obj.Labels !== "string") {
+                continue;
+            }
+            const projectEntry = obj.Labels.split(",").find((entry) => entry.startsWith("com.docker.compose.project="));
+            if (!projectEntry) {
+                continue;
+            }
+            const project = projectEntry.slice(projectEntry.indexOf("=") + 1);
+            const codeMatch = (obj.Status ?? "").match(/^(?:Exited|Restarting|Dead)\s*\((\d+)\)/);
+            const nonzeroExit = (obj.State === "exited" || obj.State === "restarting") && codeMatch !== null && Number(codeMatch[1]) > 0;
+            const existing = warnings.get(project);
+            warnings.set(project, { nonzeroExit: (existing?.nonzeroExit ?? false) || nonzeroExit });
+        }
+        return warnings;
+    }
+
+    /**
+     * One global `docker ps -a` (compose-managed containers only) feeds the
+     * per-stack nonzeroExit warn flags. Never rejects (R3): spawn failure or
+     * a malformed result yields an empty map, i.e. today's behavior.
+     */
+    static async getContainerWarnings() : Promise<Map<string, { nonzeroExit: boolean }>> {
+        try {
+            const res = await childProcessAsync.spawn("docker", [ "ps", "-a", "--filter", "label=com.docker.compose.project", "--format", "{{json .}}" ], {
+                encoding: "utf-8",
+            });
+            return this.parseContainerWarnings(res?.stdout?.toString());
+        } catch (e) {
+            log.warn("getContainerWarnings", `Failed to list containers: ${(e as Error).message}`);
+            return new Map();
+        }
+    }
+
     static async getStack(server: DockgeServer, stackName: string, skipFSOperations = false) : Promise<Stack> {
         this.validateStackName(stackName);
         let dir = path.join(server.stacksDir, stackName);

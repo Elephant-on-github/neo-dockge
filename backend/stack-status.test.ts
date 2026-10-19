@@ -97,6 +97,56 @@ describe("statusConvert with warn flags", () => {
     });
 });
 
+// F1: one global `docker ps -a` per poll feeds per-project crash flags.
+// Labels is a comma-joined string (not an object); project values never
+// contain '=', but other label values may — split on the first '=' only.
+describe("container warnings", () => {
+    const line = (over : object) => JSON.stringify({
+        State: "running",
+        Status: "Up 2 minutes",
+        Labels: "com.docker.compose.project=alpha,com.docker.compose.service=web",
+        ...over,
+    });
+
+    it("parses NDJSON into per-project nonzeroExit flags", () => {
+        const out = [
+            line({ State: "exited", Status: "Exited (137) 2 minutes ago", Labels: "com.docker.compose.project=beta" }),
+            line({ State: "restarting", Status: "Restarting (1) 3 seconds ago", Labels: "com.docker.compose.project=beta" }),
+            line({ Status: "Exited (0) 5 minutes ago", Labels: "com.docker.compose.project=beta" }),
+            "not json{",
+            line({ State: "running", Labels: "com.docker.compose.project=beta" }),
+            line({ Status: "Exited (abc)", Labels: "com.docker.compose.project=gamma" }),
+            line({ State: "exited", Status: "Exited (1)", Labels: "a=b=com.example=x,com.docker.compose.project=delta" }),
+        ].join("\n");
+        const w = Stack.parseContainerWarnings(out);
+        expect(w.get("beta")).toEqual({ nonzeroExit: true });
+        expect(w.get("gamma")).toEqual({ nonzeroExit: false });
+        expect(w.get("delta")).toEqual({ nonzeroExit: true });
+        expect(w.get("alpha")).toBeUndefined();
+    });
+
+    it("is fail-soft on empty and old-CLI template noise", () => {
+        expect(Stack.parseContainerWarnings("")).toEqual(new Map());
+        expect(Stack.parseContainerWarnings("json\njson")).toEqual(new Map());
+    });
+
+    it("getContainerWarnings spawns the exact docker ps argv", async () => {
+        spawnMock.mockResolvedValueOnce({ stdout: line({ State: "exited", Status: "Exited (1)", Labels: "com.docker.compose.project=beta" }) });
+        const w = await Stack.getContainerWarnings();
+        expect(w.get("beta")).toEqual({ nonzeroExit: true });
+        expect(spawnMock).toHaveBeenCalledWith("docker", [
+            "ps", "-a", "--filter", "label=com.docker.compose.project", "--format", "{{json .}}",
+        ], expect.anything());
+    });
+
+    it("getContainerWarnings never rejects (R3)", async () => {
+        spawnMock.mockRejectedValueOnce(new Error("docker daemon down"));
+        await expect(Stack.getContainerWarnings()).resolves.toEqual(new Map());
+        spawnMock.mockResolvedValueOnce(undefined as unknown as { stdout: string });
+        await expect(Stack.getContainerWarnings()).resolves.toEqual(new Map());
+    });
+});
+
 describe("stack list failure containment", () => {
     let stacksDir: string;
 
