@@ -1,11 +1,11 @@
 import { log } from "./log";
-import compareVersions from "compare-versions";
 import packageJSON from "../package.json";
 import { Settings } from "./settings";
 
 // How much time in ms to wait between update checks
 const UPDATE_CHECKER_INTERVAL_MS = 1000 * 60 * 60 * 48;
-const CHECK_URL = "https://dockge.kuma.pet/version";
+// Query this fork's own GitHub releases (upstream used https://dockge.kuma.pet/version)
+const CHECK_URL = "https://api.github.com/repos/Elephant-on-github/neo-dockge/releases/latest";
 
 class CheckVersion {
     version = packageJSON.version;
@@ -26,20 +26,14 @@ class CheckVersion {
 
                 // For debug
                 if (process.env.TEST_CHECK_VERSION === "1") {
-                    data.slow = "1000.0.0";
+                    data.tag_name = "1000.0.0";
                 }
 
-                const checkBeta = await Settings.get("checkBeta");
-
-                if (checkBeta && data.beta) {
-                    if (compareVersions.compare(data.beta, data.slow, ">")) {
-                        this.latestVersion = data.beta;
-                        return;
-                    }
-                }
-
-                if (data.slow) {
-                    this.latestVersion = data.slow;
+                // /releases/latest yields { tag_name: "x.y.z" } and excludes
+                // pre-releases, so the beta toggle stays quiet until this fork
+                // publishes prerelease tags.
+                if (data.tag_name) {
+                    this.latestVersion = data.tag_name;
                 }
 
             } catch (_) {
