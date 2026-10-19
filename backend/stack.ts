@@ -111,11 +111,20 @@ export class Stack {
         return this._status;
     }
 
-    validate() {
-        // Check name, allows [a-z][0-9] _ - only
-        if (!this.name.match(/^[a-z0-9_-]+$/)) {
+    /**
+     * Validate a stack name at every filesystem-path choke point.
+     * Only [a-z0-9_-] are allowed — this is what stops path traversal (GHSA-w8rm-ccw3-9jpc).
+     * @param name
+     */
+    static validateStackName(name : string) {
+        if (!name.match(/^[a-z0-9_-]+$/)) {
             throw new ValidationError("Stack name can only contain [a-z][0-9] _ - only");
         }
+    }
+
+    validate() {
+        // Check name, allows [a-z][0-9] _ - only
+        Stack.validateStackName(this.name);
 
         // Check YAML format
         yaml.parse(this.composeYAML);
@@ -153,6 +162,7 @@ export class Stack {
     }
 
     get path() : string {
+        Stack.validateStackName(this.name);
         return path.join(this.server.stacksDir, this.name);
     }
 
@@ -373,6 +383,7 @@ export class Stack {
     }
 
     static async getStack(server: DockgeServer, stackName: string, skipFSOperations = false) : Promise<Stack> {
+        this.validateStackName(stackName);
         let dir = path.join(server.stacksDir, stackName);
 
         if (!skipFSOperations) {
