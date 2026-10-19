@@ -406,13 +406,33 @@ export class Stack {
                 return statusList;
             }
 
+            const entries : { name : string, statusString : string, configFiles : string }[] = [];
             for (let composeStack of composeList) {
                 try {
-                    const status = this.statusConvert(composeStack.Status);
-                    statusList.set(composeStack.Name, status);
+                    entries.push({
+                        name: composeStack.Name,
+                        statusString: composeStack.Status,
+                        configFiles: composeStack.ConfigFiles,
+                    });
+                } catch (e) {
+                    if (e instanceof Error) {
+                        log.warn("getStatusList", `Failed to process a compose ls entry, error: ${e.message}`);
+                    }
+                }
+            }
+
+            // F1: one extra global docker ps after the compose-ls spawn
+            // (spawn order matters for the mocked tests and for the CLI call
+            // budget); getContainerWarnings never rejects (R3).
+            const warnings = await this.getContainerWarnings();
+
+            for (let entry of entries) {
+                try {
+                    const status = this.statusConvert(entry.statusString, warnings.get(entry.name));
+                    statusList.set(entry.name, status);
                     if (stacksDir) {
-                        const folder = this.resolveManagedFolder(stacksDir, composeStack.ConfigFiles);
-                        if (folder && folder !== composeStack.Name) {
+                        const folder = this.resolveManagedFolder(stacksDir, entry.configFiles);
+                        if (folder && folder !== entry.name) {
                             statusList.set(folder, status);
                         }
                     }
