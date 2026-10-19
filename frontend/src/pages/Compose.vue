@@ -184,6 +184,9 @@
                         />
                     </div>
                     <div v-if="isEditMode" class="mb-3">
+                        <button class="btn btn-sm btn-secondary me-2" @click="formatYAML">Format</button>
+                    </div>
+                    <div v-if="isEditMode" class="mb-3">
                         {{ yamlError }}
                     </div>
 
@@ -788,6 +791,48 @@ export default {
                 config,
                 doc,
             };
+        },
+
+        formatYAML() {
+            try {
+                const doc = parseDocument(this.stack.composeYAML);
+                if (doc.errors && doc.errors.length > 0) {
+                    clearTimeout(yamlErrorTimeout);
+                    if (this.yamlError) {
+                        this.yamlError = doc.errors[0].message;
+                    } else {
+                        yamlErrorTimeout = setTimeout(() => {
+                            this.yamlError = doc.errors[0].message;
+                        }, 3000);
+                    }
+                    return;
+                }
+                try {
+                    this.stack.composeYAML = doc.toString();
+                } catch (e) {
+                    clearTimeout(yamlErrorTimeout);
+                    if (this.yamlError) {
+                        this.yamlError = e.message;
+                    } else {
+                        yamlErrorTimeout = setTimeout(() => {
+                            this.yamlError = e.message;
+                        }, 3000);
+                    }
+                    return;
+                }
+                this.yamlDoc = doc;
+                clearTimeout(yamlErrorTimeout);
+                this.yamlError = "";
+            } catch (e) {
+                clearTimeout(yamlErrorTimeout);
+                if (this.yamlError) {
+                    this.yamlError = e.message;
+                } else {
+                    yamlErrorTimeout = setTimeout(() => {
+                        this.yamlError = e.message;
+                    }, 3000);
+                }
+            }
         },
 
         yamlCodeChange() {
