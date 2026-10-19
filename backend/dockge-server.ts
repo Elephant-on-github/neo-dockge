@@ -641,7 +641,11 @@ export class DockgeServer {
         let stats = new Map<string, object>();
 
         try {
-            let res = await childProcessAsync.spawn("docker", [ "stats", "--format", "json", "--no-stream" ], {
+            // The `{{json .}}` template form works on every docker CLI version.
+            // The `json` format keyword does not: on older CLIs it renders the
+            // literal text "json" per row, every parse fails, and stats come
+            // back silently empty.
+            let res = await childProcessAsync.spawn("docker", [ "stats", "--no-stream", "--format", "{{json .}}" ], {
                 encoding: "utf-8",
             });
 

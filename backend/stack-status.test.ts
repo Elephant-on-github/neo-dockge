@@ -683,6 +683,131 @@ describe("getServiceStatusList exit-code suffix (F1, M-4)", () => {
     });
 });
 
+// 1.6.3: host-wide container list (lazydocker-style stats pane) joined from
+// `docker ps -a` + `docker stats`, with managed/external derived from the
+// compose working_dir label vs stacksDir (no storage).
+describe("Stack.getContainerList (1.6.3)", () => {
+    let stacksDir: string;
+
+    beforeAll(() => {
+        stacksDir = fs.mkdtempSync(path.join(os.tmpdir(), "neo-dockge-containers-"));
+        fs.mkdirSync(path.join(stacksDir, "beta"));
+    });
+
+    afterAll(() => {
+        fs.rmSync(stacksDir, { recursive: true,
+            force: true });
+    });
+
+    beforeEach(() => {
+        spawnMock.mockReset();
+    });
+
+    const psLine = (over : object) => JSON.stringify({
+        ID: "aaaaaaaaaaaa",
+        Names: "beta-web-1",
+        Image: "nginx:latest",
+        State: "running",
+        Status: "Up 2 minutes",
+        Labels: "",
+        ...over,
+    });
+
+    const statsLine = (over : object) => JSON.stringify({
+        ID: "aaaaaaaaaaaa",
+        Name: "beta-web-1",
+        CPUPerc: "1.50%",
+        MemUsage: "12MiB / 1GiB",
+        MemPerc: "1.17%",
+        NetIO: "1kB / 2kB",
+        BlockIO: "0B / 8kB",
+        PIDs: "5",
+        ...over,
+    });
+
+    it("joins ps and stats by id and marks stacks under stacksDir as managed", async () => {
+        spawnMock.mockResolvedValueOnce({ stdout: psLine({
+            Labels: "com.docker.compose.project.working_dir=" + path.join(stacksDir, "beta") + ",com.docker.compose.project=beta",
+        }) });
+        spawnMock.mockResolvedValueOnce({ stdout: statsLine({}) });
+        const list = await Stack.getContainerList(stacksDir);
+        expect(list.length).toBe(1);
+        expect(list[0].name).toBe("beta-web-1");
+        expect(list[0].image).toBe("nginx:latest");
+        expect(list[0].state).toBe("running");
+        expect(list[0].managed).toBe(true);
+        expect(list[0].project).toBe("beta");
+        expect(list[0].workingDir).toBe(path.join(stacksDir, "beta"));
+        expect(list[0].cpu).toBe("1.50%");
+        expect(list[0].memUsage).toBe("12MiB / 1GiB");
+        expect(list[0].netIO).toBe("1kB / 2kB");
+        expect(list[0].blockIO).toBe("0B / 8kB");
+        expect(list[0].pids).toBe("5");
+    });
+
+    it("marks containers outside the stacks dir as external", async () => {
+        spawnMock.mockResolvedValueOnce({ stdout: psLine({
+            ID: "bbbbbbbbbbbb",
+            Names: "other-thing",
+            Labels: "com.docker.compose.project.working_dir=/opt/other",
+        }) });
+        spawnMock.mockResolvedValueOnce({ stdout: "" });
+        const list = await Stack.getContainerList(stacksDir);
+        expect(list[0].managed).toBe(false);
+        expect(list[0].cpu).toBe("");
+    });
+
+    it("treats a nested working dir as not managed (R2 direct-child rule)", async () => {
+        spawnMock.mockResolvedValueOnce({ stdout: psLine({
+            Labels: "com.docker.compose.project.working_dir=" + path.join(stacksDir, "beta", "sub"),
+        }) });
+        spawnMock.mockResolvedValueOnce({ stdout: "" });
+        const list = await Stack.getContainerList(stacksDir);
+        expect(list[0].managed).toBe(false);
+    });
+
+    it("keeps stopped containers that have no stats row", async () => {
+        spawnMock.mockResolvedValueOnce({ stdout: psLine({
+            ID: "cccccccccccc",
+            Names: "beta-job-1",
+            State: "exited",
+            Status: "Exited (0) 1 minute ago",
+        }) });
+        spawnMock.mockResolvedValueOnce({ stdout: "" });
+        const list = await Stack.getContainerList(stacksDir);
+        expect(list.length).toBe(1);
+        expect(list[0].state).toBe("exited");
+        expect(list[0].cpu).toBe("");
+    });
+
+    it("skips malformed lines and returns an empty list for empty output", async () => {
+        spawnMock.mockResolvedValueOnce({ stdout: "not json{" + "\n" + psLine({ ID: "dddddddddddd" }) });
+        spawnMock.mockResolvedValueOnce({ stdout: "" });
+        const list = await Stack.getContainerList(stacksDir);
+        expect(list.length).toBe(1);
+        expect(list[0].id).toBe("dddddddddddd");
+
+        spawnMock.mockReset();
+        spawnMock.mockResolvedValueOnce({ stdout: "" });
+        spawnMock.mockResolvedValueOnce({ stdout: "" });
+        expect(await Stack.getContainerList(stacksDir)).toEqual([]);
+    });
+
+    it("keeps the container list when docker stats fails (R3)", async () => {
+        spawnMock.mockResolvedValueOnce({ stdout: psLine({}) });
+        spawnMock.mockRejectedValueOnce(new Error("docker stats failed"));
+        const list = await Stack.getContainerList(stacksDir);
+        expect(list.length).toBe(1);
+        expect(list[0].cpu).toBe("");
+    });
+
+    it("returns an empty list when docker ps fails (R3)", async () => {
+        spawnMock.mockRejectedValueOnce(new Error("docker daemon down"));
+        spawnMock.mockResolvedValueOnce({ stdout: "" });
+        expect(await Stack.getContainerList(stacksDir)).toEqual([]);
+    });
+});
+
 describe("Stack.isManagedByDockge resilience (final fix pass M-4)", () => {
     it("returns false instead of throwing when the folder vanishes between existsSync and statSync", () => {
         const never = path.join(os.tmpdir(), "neo-dockge-never-exists");

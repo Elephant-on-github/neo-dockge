@@ -53,6 +53,28 @@ export const RUNNING = 3;
 export const EXITED = 4;
 export const DEGRADED = 5;
 
+/**
+ * A host-wide container row (1.6.3): identity + live stats. Shared by the
+ * backend (docker ps + docker stats join) and the Containers page.
+ */
+export interface ContainerListEntry {
+    id: string;
+    name: string;
+    image: string;
+    state: string;
+    status: string;
+    health: string;
+    project: string;
+    workingDir: string;
+    managed: boolean;
+    cpu: string;
+    memUsage: string;
+    memPerc: string;
+    netIO: string;
+    blockIO: string;
+    pids: string;
+}
+
 export function statusName(status : number) : string {
     switch (status) {
         case CREATED_FILE:

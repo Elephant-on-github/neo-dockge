@@ -11,6 +11,7 @@ import {
     CREATED_FILE,
     CREATED_STACK,
     DEGRADED,
+    type ContainerListEntry,
     EXITED, getCombinedTerminalName,
     getComposeTerminalName, getContainerExecTerminalName,
     PROGRESS_TERMINAL_ROWS,
@@ -589,6 +590,133 @@ export class Stack {
             log.warn("getContainerWarnings", `Failed to list containers: ${(e as Error).message}`);
             return new Map();
         }
+    }
+
+    /**
+     * Host-wide container list with live stats (1.6.3, lazydocker-style
+     * "pane of glass"). Joins `docker ps -a` (every container) with
+     * `docker stats` (running ones) by the 12-char short id.
+     *
+     * `managed` is derived from the compose `working_dir` label: a project
+     * directory that is a direct child of stacksDir is managed (same rule as
+     * R2). No storage is involved - the daemon is the source of truth.
+     *
+     * Never rejects (R3): a failing `docker ps` yields an empty list, a
+     * failing `docker stats` still lists the containers without stats.
+     * @param stacksDir absolute stacks directory
+     */
+    static async getContainerList(stacksDir: string) : Promise<ContainerListEntry[]> {
+        let psEntries : { ID? : string, Names? : string, Image? : string, State? : string, Status? : string, HealthStatus? : string, Labels? : string }[] = [];
+        try {
+            const res = await childProcessAsync.spawn("docker", [ "ps", "-a", "--format", "{{json .}}" ], {
+                encoding: "utf-8",
+            });
+            psEntries = this.parseNdjson(res?.stdout?.toString());
+        } catch (e) {
+            log.warn("getContainerList", `Failed to list containers: ${(e as Error).message}`);
+            return [];
+        }
+
+        let statsEntries : { ID? : string, Name? : string, CPUPerc? : string, MemUsage? : string, MemPerc? : string, NetIO? : string, BlockIO? : string, PIDs? : string }[] = [];
+        try {
+            const res = await childProcessAsync.spawn("docker", [ "stats", "--no-stream", "--format", "{{json .}}" ], {
+                encoding: "utf-8",
+            });
+            statsEntries = this.parseNdjson(res?.stdout?.toString());
+        } catch (e) {
+            // Stats are a nice-to-have: keep the container list.
+            log.warn("getContainerList", `Failed to get container stats: ${(e as Error).message}`);
+        }
+
+        const statsById = new Map<string, typeof statsEntries[number]>();
+        const statsByName = new Map<string, typeof statsEntries[number]>();
+        for (let entry of statsEntries) {
+            if (entry.ID) {
+                statsById.set(entry.ID.slice(0, 12), entry);
+            }
+            if (entry.Name) {
+                statsByName.set(entry.Name, entry);
+            }
+        }
+
+        const stacksDirFull = path.resolve(stacksDir);
+        const list : ContainerListEntry[] = [];
+        for (let entry of psEntries) {
+            const name = (entry.Names ?? "").split(",")[0];
+            const labels = this.parseLabels(entry.Labels);
+            const workingDir = labels.get("com.docker.compose.project.working_dir") ?? "";
+            const project = labels.get("com.docker.compose.project") ?? "";
+            const id = entry.ID ?? "";
+            const stats = (id ? statsById.get(id.slice(0, 12)) : undefined) ?? (name ? statsByName.get(name) : undefined);
+
+            let managed = false;
+            if (workingDir) {
+                try {
+                    managed = path.dirname(path.resolve(workingDir)) === stacksDirFull;
+                } catch {
+                    managed = false;
+                }
+            }
+
+            list.push({
+                id,
+                name,
+                image: entry.Image ?? "",
+                state: entry.State ?? "",
+                status: entry.Status ?? "",
+                health: entry.HealthStatus ?? "",
+                project,
+                workingDir,
+                managed,
+                cpu: stats?.CPUPerc ?? "",
+                memUsage: stats?.MemUsage ?? "",
+                memPerc: stats?.MemPerc ?? "",
+                netIO: stats?.NetIO ?? "",
+                blockIO: stats?.BlockIO ?? "",
+                pids: stats?.PIDs ?? "",
+            });
+        }
+        return list;
+    }
+
+    /**
+     * Parse NDJSON output into objects, skipping unparseable lines.
+     */
+    private static parseNdjson(output : string | undefined) : any[] {
+        if (typeof output !== "string") {
+            return [];
+        }
+        const result : any[] = [];
+        for (let line of output.split("\n")) {
+            if (!line.trim()) {
+                continue;
+            }
+            try {
+                result.push(JSON.parse(line));
+            } catch {
+                // skip malformed line
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Parse the comma-joined `Labels` string of `docker ps` into a map.
+     * Values may contain "=", so split each entry on the first "=" only.
+     */
+    private static parseLabels(labels : string | undefined) : Map<string, string> {
+        const result = new Map<string, string>();
+        if (typeof labels !== "string" || !labels) {
+            return result;
+        }
+        for (let entry of labels.split(",")) {
+            const index = entry.indexOf("=");
+            if (index <= 0) {
+                continue;
+            }
+            result.set(entry.slice(0, index), entry.slice(index + 1));
+        }
+        return result;
     }
 
     static async getStack(server: DockgeServer, stackName: string, skipFSOperations = false) : Promise<Stack> {
