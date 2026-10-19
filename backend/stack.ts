@@ -281,59 +281,84 @@ export class Stack {
             stackList = new Map<string, Stack>();
 
             // Scan the stacks directory, and get the stack list
-            let filenameList = await fsAsync.readdir(stacksDir);
+            try {
+                let filenameList = await fsAsync.readdir(stacksDir);
 
-            for (let filename of filenameList) {
-                try {
-                    // Check if it is a directory
-                    let stat = await fsAsync.stat(path.join(stacksDir, filename));
-                    if (!stat.isDirectory()) {
-                        continue;
-                    }
-                    // If no compose file exists, skip it
-                    if (!await Stack.composeFileExists(stacksDir, filename)) {
-                        continue;
-                    }
-                    let stack = await this.getStack(server, filename);
-                    stack._status = CREATED_FILE;
-                    stackList.set(filename, stack);
-                } catch (e) {
-                    if (e instanceof Error) {
-                        log.warn("getStackList", `Failed to get stack ${filename}, error: ${e.message}`);
+                for (let filename of filenameList) {
+                    try {
+                        // Check if it is a directory
+                        let stat = await fsAsync.stat(path.join(stacksDir, filename));
+                        if (!stat.isDirectory()) {
+                            continue;
+                        }
+                        // If no compose file exists, skip it
+                        if (!await Stack.composeFileExists(stacksDir, filename)) {
+                            continue;
+                        }
+                        let stack = await this.getStack(server, filename);
+                        stack._status = CREATED_FILE;
+                        stackList.set(filename, stack);
+                    } catch (e) {
+                        if (e instanceof Error) {
+                            log.warn("getStackList", `Failed to get stack ${filename}, error: ${e.message}`);
+                        }
                     }
                 }
-            }
 
-            // Cache by copying
-            this.managedStackList = new Map(stackList);
+                // Cache by copying
+                this.managedStackList = new Map(stackList);
+            } catch (e) {
+                // A broken stacks dir must degrade, not reject: the 10s cron calls
+                // sendStackList unguarded and spawn rejects on non-zero exit (#875).
+                if (e instanceof Error) {
+                    log.warn("getStackList", `Failed to scan the stacks directory, error: ${e.message}`);
+                }
+            }
         }
 
         // Get status from docker compose ls
-        let res = await childProcessAsync.spawn("docker", [ "compose", "ls", "--all", "--format", "json" ], {
-            encoding: "utf-8",
-        });
+        try {
+            let res = await childProcessAsync.spawn("docker", [ "compose", "ls", "--all", "--format", "json" ], {
+                encoding: "utf-8",
+            });
 
-        if (!res.stdout) {
-            return stackList;
-        }
-
-        let composeList = JSON.parse(res.stdout.toString());
-
-        for (let composeStack of composeList) {
-            let stack = stackList.get(composeStack.Name);
-
-            // This stack probably is not managed by Dockge, but we still want to show it
-            if (!stack) {
-                // Skip the dockge stack if it is not managed by Dockge
-                if (composeStack.Name === "dockge") {
-                    continue;
-                }
-                stack = new Stack(server, composeStack.Name);
-                stackList.set(composeStack.Name, stack);
+            if (!res.stdout) {
+                return stackList;
             }
 
-            stack._status = this.statusConvert(composeStack.Status);
-            stack._configFilePath = composeStack.ConfigFiles;
+            let composeList = JSON.parse(res.stdout.toString());
+
+            if (!Array.isArray(composeList)) {
+                throw new Error("Unexpected docker compose ls output");
+            }
+
+            for (let composeStack of composeList) {
+                try {
+                    let stack = stackList.get(composeStack.Name);
+
+                    // This stack probably is not managed by Dockge, but we still want to show it
+                    if (!stack) {
+                        // Skip the dockge stack if it is not managed by Dockge
+                        if (composeStack.Name === "dockge") {
+                            continue;
+                        }
+                        stack = new Stack(server, composeStack.Name);
+                        stackList.set(composeStack.Name, stack);
+                    }
+
+                    stack._status = this.statusConvert(composeStack.Status);
+                    stack._configFilePath = composeStack.ConfigFiles;
+                } catch (e) {
+                    // One malformed entry must not blank the list: log and keep the siblings.
+                    if (e instanceof Error) {
+                        log.warn("getStackList", `Failed to process a compose ls entry, error: ${e.message}`);
+                    }
+                }
+            }
+        } catch (e) {
+            if (e instanceof Error) {
+                log.warn("getStackList", `Failed to get statuses from docker compose ls, error: ${e.message}`);
+            }
         }
 
         return stackList;
@@ -346,18 +371,35 @@ export class Stack {
     static async getStatusList() : Promise<Map<string, number>> {
         let statusList = new Map<string, number>();
 
-        let res = await childProcessAsync.spawn("docker", [ "compose", "ls", "--all", "--format", "json" ], {
-            encoding: "utf-8",
-        });
+        try {
+            let res = await childProcessAsync.spawn("docker", [ "compose", "ls", "--all", "--format", "json" ], {
+                encoding: "utf-8",
+            });
 
-        if (!res.stdout) {
-            return statusList;
-        }
+            if (!res.stdout) {
+                return statusList;
+            }
 
-        let composeList = JSON.parse(res.stdout.toString());
+            let composeList = JSON.parse(res.stdout.toString());
 
-        for (let composeStack of composeList) {
-            statusList.set(composeStack.Name, this.statusConvert(composeStack.Status));
+            if (!Array.isArray(composeList)) {
+                return statusList;
+            }
+
+            for (let composeStack of composeList) {
+                try {
+                    statusList.set(composeStack.Name, this.statusConvert(composeStack.Status));
+                } catch (e) {
+                    if (e instanceof Error) {
+                        log.warn("getStatusList", `Failed to process a compose ls entry, error: ${e.message}`);
+                    }
+                }
+            }
+        } catch (e) {
+            // Callers (updateStatus) treat an empty map as UNKNOWN — degrade, never reject (#875).
+            if (e instanceof Error) {
+                log.warn("getStatusList", `Failed to get statuses from docker compose ls, error: ${e.message}`);
+            }
         }
 
         return statusList;
