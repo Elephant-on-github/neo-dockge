@@ -18,14 +18,19 @@ jobs:
         node: [24] # Matches the container base image
     runs-on: ${{ matrix.os }}
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Configure git line endings  # Mainly for Windows; must run after checkout config
+      # Line endings must be configured BEFORE checkout: on Windows the
+      # runner's autocrlf rewrites the stored LF to CRLF during checkout,
+      # and eslint's linebreak-style: unix then fails every file.
+      # (Upstream ran this config before checkout; the plan's "move checkout
+      # first" inversion broke it — see ledger.)
+      - name: Configure git line endings
         if: runner.os == 'Windows'
         run: |
           git config --global core.autocrlf false
           git config --global core.eol lf
+
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
