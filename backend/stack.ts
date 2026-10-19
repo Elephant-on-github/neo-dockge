@@ -681,10 +681,10 @@ export class Stack {
             throw new Error("Failed to pull, please check the terminal output for more information.");
         }
 
-        // If the stack is not running, we don't need to restart it
+        // If the stack is not running (and not degraded), we don't need to restart it
         await this.updateStatus();
         log.debug("update", "Status: " + this.status);
-        if (this.status !== RUNNING) {
+        if (this.status !== RUNNING && this.status !== DEGRADED) {
             return exitCode;
         }
 

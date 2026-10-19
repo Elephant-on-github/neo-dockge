@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { Stack } from "./stack";
+import { Terminal } from "./terminal";
 import { CREATED_STACK, DEGRADED, EXITED, RUNNING, UNKNOWN, statusColor, statusName, statusNameShort } from "../common/util-common";
 import { DockgeServer } from "./dockge-server";
 import childProcessAsync from "promisify-child-process";
@@ -14,7 +15,12 @@ vi.mock("promisify-child-process", () => ({
     default: { spawn: vi.fn() },
 }));
 
+vi.mock("./terminal", () => ({
+    Terminal: { exec: vi.fn() },
+}));
+
 const spawnMock = vi.mocked(childProcessAsync.spawn);
+const terminalExecMock = vi.mocked(Terminal.exec);
 const fakeServer = (stacksDir: string) => ({ stacksDir }) as unknown as DockgeServer;
 
 // statusConvert mirrors `docker compose ls --all --format json` Status strings.
@@ -523,6 +529,67 @@ describe("getStackList crash-warning wiring (F1)", () => {
         spawnMock.mockRejectedValueOnce(new Error("docker daemon down"));
         const list = await Stack.getStackList(fakeServer(stacksDir));
         expect(list.get("beta")?.status).toBe(RUNNING);
+    });
+});
+
+describe("update redeploy gate (F1, C-2)", () => {
+    let stacksDir: string;
+
+    beforeAll(() => {
+        stacksDir = fs.mkdtempSync(path.join(os.tmpdir(), "neo-dockge-update-"));
+        fs.mkdirSync(path.join(stacksDir, "beta"));
+        fs.writeFileSync(path.join(stacksDir, "beta", "compose.yaml"), "services:\n  web:\n    image: nginx\n");
+    });
+
+    afterAll(() => {
+        fs.rmSync(stacksDir, { recursive: true,
+            force: true });
+    });
+
+    beforeEach(() => {
+        spawnMock.mockReset();
+        terminalExecMock.mockReset();
+        terminalExecMock.mockResolvedValue(0);
+    });
+
+    const composeLs = (entries : object[]) => ({ stdout: JSON.stringify(entries) });
+    const psLine = (over : object) => JSON.stringify({
+        State: "running",
+        Status: "Up 2 minutes",
+        Labels: "com.docker.compose.project=x",
+        ...over,
+    });
+
+    it("redeploys (up) when the stack is DEGRADED", async () => {
+        spawnMock.mockResolvedValueOnce(composeLs([ {
+            Name: "beta",
+            Status: "exited(1), running(2)",
+            ConfigFiles: path.join(stacksDir, "beta", "compose.yaml"),
+        } ]));
+        spawnMock.mockResolvedValueOnce({ stdout: psLine({
+            State: "exited",
+            Status: "Exited (137)",
+            Labels: "com.docker.compose.project=beta",
+        }) });
+        const stack = new Stack(fakeServer(stacksDir), "beta");
+        const socket = { endpoint: "x" } as any;
+        await stack.update(socket);
+        expect(terminalExecMock).toHaveBeenCalledTimes(2);
+        const upArgs = terminalExecMock.mock.calls[1][4];
+        expect(Array.isArray(upArgs) ? upArgs : []).toContain("up");
+    });
+
+    it("skips up when the stack is EXITED", async () => {
+        spawnMock.mockResolvedValueOnce(composeLs([ {
+            Name: "beta",
+            Status: "exited(3)",
+            ConfigFiles: path.join(stacksDir, "beta", "compose.yaml"),
+        } ]));
+        spawnMock.mockResolvedValueOnce({ stdout: "[]" });
+        const stack = new Stack(fakeServer(stacksDir), "beta");
+        const socket = { endpoint: "x" } as any;
+        await stack.update(socket);
+        expect(terminalExecMock).toHaveBeenCalledTimes(1);
     });
 });
 
