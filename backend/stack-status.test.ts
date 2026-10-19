@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { Stack } from "./stack";
 import { Terminal } from "./terminal";
+import type { DockgeSocket } from "./util-server";
 import { CREATED_STACK, DEGRADED, EXITED, RUNNING, UNKNOWN, statusColor, statusName, statusNameShort } from "../common/util-common";
 import { DockgeServer } from "./dockge-server";
 import childProcessAsync from "promisify-child-process";
@@ -116,13 +117,22 @@ describe("container warnings", () => {
 
     it("parses NDJSON into per-project nonzeroExit flags", () => {
         const out = [
-            line({ State: "exited", Status: "Exited (137) 2 minutes ago", Labels: "com.docker.compose.project=beta" }),
-            line({ State: "restarting", Status: "Restarting (1) 3 seconds ago", Labels: "com.docker.compose.project=beta" }),
-            line({ Status: "Exited (0) 5 minutes ago", Labels: "com.docker.compose.project=beta" }),
+            line({ State: "exited",
+                Status: "Exited (137) 2 minutes ago",
+                Labels: "com.docker.compose.project=beta" }),
+            line({ State: "restarting",
+                Status: "Restarting (1) 3 seconds ago",
+                Labels: "com.docker.compose.project=beta" }),
+            line({ Status: "Exited (0) 5 minutes ago",
+                Labels: "com.docker.compose.project=beta" }),
             "not json{",
-            line({ State: "running", Labels: "com.docker.compose.project=beta" }),
-            line({ Status: "Exited (abc)", Labels: "com.docker.compose.project=gamma" }),
-            line({ State: "exited", Status: "Exited (1)", Labels: "a=b=com.example=x,com.docker.compose.project=delta" }),
+            line({ State: "running",
+                Labels: "com.docker.compose.project=beta" }),
+            line({ Status: "Exited (abc)",
+                Labels: "com.docker.compose.project=gamma" }),
+            line({ State: "exited",
+                Status: "Exited (1)",
+                Labels: "a=b=com.example=x,com.docker.compose.project=delta" }),
         ].join("\n");
         const w = Stack.parseContainerWarnings(out);
         expect(w.get("beta")).toEqual({ nonzeroExit: true });
@@ -137,7 +147,9 @@ describe("container warnings", () => {
     });
 
     it("getContainerWarnings spawns the exact docker ps argv", async () => {
-        spawnMock.mockResolvedValueOnce({ stdout: line({ State: "exited", Status: "Exited (1)", Labels: "com.docker.compose.project=beta" }) });
+        spawnMock.mockResolvedValueOnce({ stdout: line({ State: "exited",
+            Status: "Exited (1)",
+            Labels: "com.docker.compose.project=beta" }) });
         const w = await Stack.getContainerWarnings();
         expect(w.get("beta")).toEqual({ nonzeroExit: true });
         expect(spawnMock).toHaveBeenCalledWith("docker", [
@@ -400,11 +412,11 @@ describe("getStatusList crash-warning wiring (F1)", () => {
     });
 
     it("marks a living stack with a crashed sibling DEGRADED (project-label match)", async () => {
-        spawnMock.mockResolvedValueOnce(composeLs([ {
+        spawnMock.mockResolvedValueOnce(composeLs([{
             Name: "beta",
             Status: "exited(1), running(2)",
             ConfigFiles: path.join(stacksDir, "beta", "compose.yaml"),
-        } ]));
+        }]));
         spawnMock.mockResolvedValueOnce({ stdout: psLine({
             State: "exited",
             Status: "Exited (137)",
@@ -415,11 +427,11 @@ describe("getStatusList crash-warning wiring (F1)", () => {
     });
 
     it("aliases inherit the degraded status, keyed by project Name", async () => {
-        spawnMock.mockResolvedValueOnce(composeLs([ {
+        spawnMock.mockResolvedValueOnce(composeLs([{
             Name: "renamed-proj",
             Status: "exited(1), running(2)",
             ConfigFiles: path.join(stacksDir, "alpha", "compose.yaml"),
-        } ]));
+        }]));
         spawnMock.mockResolvedValueOnce({ stdout: psLine({
             State: "exited",
             Status: "Exited (137)",
@@ -431,22 +443,22 @@ describe("getStatusList crash-warning wiring (F1)", () => {
     });
 
     it("falls back to compose-ls-only statuses when docker ps fails (R3)", async () => {
-        spawnMock.mockResolvedValueOnce(composeLs([ {
+        spawnMock.mockResolvedValueOnce(composeLs([{
             Name: "beta",
             Status: "exited(1), running(2)",
             ConfigFiles: path.join(stacksDir, "beta", "compose.yaml"),
-        } ]));
+        }]));
         spawnMock.mockRejectedValueOnce(new Error("docker daemon down"));
         const statuses = await Stack.getStatusList();
         expect(statuses.get("beta")).toBe(RUNNING);
     });
 
     it("ignores foreign projects from docker ps", async () => {
-        spawnMock.mockResolvedValueOnce(composeLs([ {
+        spawnMock.mockResolvedValueOnce(composeLs([{
             Name: "beta",
             Status: "running(1)",
             ConfigFiles: path.join(stacksDir, "beta", "compose.yaml"),
-        } ]));
+        }]));
         spawnMock.mockResolvedValueOnce({ stdout: psLine({
             State: "exited",
             Status: "Exited (1)",
@@ -491,11 +503,11 @@ describe("getStackList crash-warning wiring (F1)", () => {
     });
 
     it("marks a folder stack DEGRADED via its project's crashed container", async () => {
-        spawnMock.mockResolvedValueOnce(composeLs([ {
+        spawnMock.mockResolvedValueOnce(composeLs([{
             Name: "beta",
             Status: "exited(1), running(2)",
             ConfigFiles: path.join(stacksDir, "beta", "compose.yaml"),
-        } ]));
+        }]));
         spawnMock.mockResolvedValueOnce({ stdout: psLine({
             State: "exited",
             Status: "Exited (137)",
@@ -506,11 +518,11 @@ describe("getStackList crash-warning wiring (F1)", () => {
     });
 
     it("renamed projects carry the warn to the joined folder stack", async () => {
-        spawnMock.mockResolvedValueOnce(composeLs([ {
+        spawnMock.mockResolvedValueOnce(composeLs([{
             Name: "renamed-proj",
             Status: "exited(1), running(2)",
             ConfigFiles: path.join(stacksDir, "alpha", "compose.yaml"),
-        } ]));
+        }]));
         spawnMock.mockResolvedValueOnce({ stdout: psLine({
             State: "exited",
             Status: "Exited (137)",
@@ -521,11 +533,11 @@ describe("getStackList crash-warning wiring (F1)", () => {
     });
 
     it("falls back to compose-ls-only status when docker ps fails (R3)", async () => {
-        spawnMock.mockResolvedValueOnce(composeLs([ {
+        spawnMock.mockResolvedValueOnce(composeLs([{
             Name: "beta",
             Status: "exited(1), running(2)",
             ConfigFiles: path.join(stacksDir, "beta", "compose.yaml"),
-        } ]));
+        }]));
         spawnMock.mockRejectedValueOnce(new Error("docker daemon down"));
         const list = await Stack.getStackList(fakeServer(stacksDir));
         expect(list.get("beta")?.status).toBe(RUNNING);
@@ -561,18 +573,18 @@ describe("update redeploy gate (F1, C-2)", () => {
     });
 
     it("redeploys (up) when the stack is DEGRADED", async () => {
-        spawnMock.mockResolvedValueOnce(composeLs([ {
+        spawnMock.mockResolvedValueOnce(composeLs([{
             Name: "beta",
             Status: "exited(1), running(2)",
             ConfigFiles: path.join(stacksDir, "beta", "compose.yaml"),
-        } ]));
+        }]));
         spawnMock.mockResolvedValueOnce({ stdout: psLine({
             State: "exited",
             Status: "Exited (137)",
             Labels: "com.docker.compose.project=beta",
         }) });
         const stack = new Stack(fakeServer(stacksDir), "beta");
-        const socket = { endpoint: "x" } as any;
+        const socket = { endpoint: "x" } as unknown as DockgeSocket;
         await stack.update(socket);
         expect(terminalExecMock).toHaveBeenCalledTimes(2);
         const upArgs = terminalExecMock.mock.calls[1][4];
@@ -580,16 +592,94 @@ describe("update redeploy gate (F1, C-2)", () => {
     });
 
     it("skips up when the stack is EXITED", async () => {
-        spawnMock.mockResolvedValueOnce(composeLs([ {
+        spawnMock.mockResolvedValueOnce(composeLs([{
             Name: "beta",
             Status: "exited(3)",
             ConfigFiles: path.join(stacksDir, "beta", "compose.yaml"),
-        } ]));
+        }]));
         spawnMock.mockResolvedValueOnce({ stdout: "[]" });
         const stack = new Stack(fakeServer(stacksDir), "beta");
-        const socket = { endpoint: "x" } as any;
+        const socket = { endpoint: "x" } as unknown as DockgeSocket;
         await stack.update(socket);
         expect(terminalExecMock).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe("getServiceStatusList exit-code suffix (F1, M-4)", () => {
+    let stacksDir: string;
+
+    beforeAll(() => {
+        stacksDir = fs.mkdtempSync(path.join(os.tmpdir(), "neo-dockge-svc-"));
+        fs.mkdirSync(path.join(stacksDir, "beta"));
+        fs.writeFileSync(path.join(stacksDir, "beta", "compose.yaml"), "services:\n  web:\n    image: nginx\n");
+    });
+
+    afterAll(() => {
+        fs.rmSync(stacksDir, { recursive: true,
+            force: true });
+    });
+
+    beforeEach(() => {
+        spawnMock.mockReset();
+    });
+
+    const ndjson = [
+        JSON.stringify({ Service: "web",
+            State: "exited",
+            Health: "",
+            Name: "c1",
+            ExitCode: 137 }),
+        JSON.stringify({ Service: "db",
+            State: "running",
+            Health: "healthy",
+            Name: "c2",
+            ExitCode: 0 }),
+        JSON.stringify({ Service: "api",
+            State: "exited",
+            Health: "unhealthy",
+            Name: "c3",
+            ExitCode: 137 }),
+        JSON.stringify({ Service: "worker",
+            State: "restarting",
+            Health: "",
+            Name: "c4",
+            ExitCode: 1 }),
+        JSON.stringify({ Service: "old",
+            State: "exited",
+            Health: "",
+            Name: "c5" }),
+    ].join("\n");
+
+    it("suffixes nonzero exit codes, respects Health precedence and missing ExitCode", async () => {
+        spawnMock.mockResolvedValueOnce({ stdout: ndjson });
+        const stack = new Stack(fakeServer(stacksDir), "beta");
+        const result = await stack.getServiceStatusList();
+        expect(result.get("web")?.[0]?.status).toBe("exited (137)");
+        expect(result.get("db")?.[0]?.status).toBe("healthy");
+        expect(result.get("api")?.[0]?.status).toBe("unhealthy");
+        expect(result.get("worker")?.[0]?.status).toBe("restarting (1)");
+        expect(result.get("old")?.[0]?.status).toBe("exited");
+    });
+
+    it("handles the older array-shaped compose ps output", async () => {
+        const arr = JSON.stringify([
+            { Service: "web",
+                State: "exited",
+                Health: "",
+                Name: "c1",
+                ExitCode: 9 },
+        ]);
+        spawnMock.mockResolvedValueOnce({ stdout: arr });
+        const stack = new Stack(fakeServer(stacksDir), "beta");
+        const result = await stack.getServiceStatusList();
+        expect(result.get("web")?.[0]?.status).toBe("exited (9)");
+    });
+
+    it("is fail-soft on spawn failure", async () => {
+        spawnMock.mockRejectedValueOnce(new Error("docker daemon down"));
+        const stack = new Stack(fakeServer(stacksDir), "beta");
+        const result = await stack.getServiceStatusList();
+        expect(result.size).toBe(0);
     });
 });
 

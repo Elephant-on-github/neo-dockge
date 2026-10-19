@@ -248,6 +248,8 @@ export default defineComponent({
                 return "bg-primary";
             } else if (this.status === "unhealthy") {
                 return "bg-danger";
+            } else if (this.status === "restarting" || this.status.startsWith("restarting")) {
+                return "bg-warning";
             } else {
                 return "bg-secondary";
             }

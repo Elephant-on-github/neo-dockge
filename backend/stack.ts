@@ -728,7 +728,7 @@ export class Stack {
     }
 
     async getServiceStatusList() {
-        let statusList = new Map<string, Array<object>>();
+        let statusList = new Map<string, Array<{ status: string, name: string }>>();
 
         try {
             let res = await childProcessAsync.spawn("docker", this.getComposeOptions("ps", "--format", "json"), {
@@ -742,12 +742,19 @@ export class Stack {
 
             let lines = res.stdout?.toString().split("\n");
 
-            const addLine = (obj: { Service: string, State: string, Name: string, Health: string }) => {
+            const addLine = (obj: { Service: string, State: string, Name: string, Health: string, ExitCode?: number }) => {
                 if (!statusList.has(obj.Service)) {
                     statusList.set(obj.Service, []);
                 }
+                let status = obj.Health || obj.State;
+                // F1: suffix nonzero exit codes on crashed/restarting service badges.
+                // Health precedence: a healthchecked container stays "unhealthy" (no
+                // suffix). Missing ExitCode (old compose) or exit 0 → no suffix.
+                if ((status === "exited" || status === "restarting") && typeof obj.ExitCode === "number" && obj.ExitCode !== 0) {
+                    status = `${status} (${obj.ExitCode})`;
+                }
                 statusList.get(obj.Service)?.push({
-                    status: obj.Health || obj.State,
+                    status,
                     name: obj.Name
                 });
             };
