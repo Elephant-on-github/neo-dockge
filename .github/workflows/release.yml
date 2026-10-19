@@ -1,0 +1,62 @@
+name: Release
+
+# Publishes versioned images to GHCR when a semantic-version tag is pushed.
+# Tag 1.6.0 -> ghcr.io/elephant-on-github/neo-dockge:1.6.0, :1, :latest
+on:
+  push:
+    tags:
+      - '*.*.*'
+
+permissions: {}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: npm clean-install --no-fund
+
+      - name: Test
+        run: npm test
+
+      # The app image pulls its base/healthcheck stages from GHCR, so build and
+      # push them first.
+      - name: Build base + healthcheck images
+        run: |
+          npm run build:docker-base
+          npm run build:healthcheck
+
+      - name: Build frontend
+        run: npm run build:frontend
+
+      - name: Build and push release image
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: npm run build:docker

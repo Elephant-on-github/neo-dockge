@@ -27,26 +27,28 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
-          password: ${{ secrets.GHCR_TOKEN }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Use Node.js 22
+      - name: Use Node.js 24
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
 
       - name: Install dependencies
         run: npm clean-install --no-fund
+
+      # The app image pulls its base/healthcheck stages from GHCR, so build them
+      # first. These are cheap to rebuild and keep the base in sync with the
+      # Dockerfiles.
+      - name: Build base + healthcheck images
+        run: |
+          npm run build:docker-base
+          npm run build:healthcheck
 
       - name: Run release-nightly
         run: npm run release-nightly
