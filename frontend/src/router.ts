@@ -5,6 +5,7 @@ import Setup from "./pages/Setup.vue";
 import Dashboard from "./pages/Dashboard.vue";
 import DashboardHome from "./pages/DashboardHome.vue";
 import Console from "./pages/Console.vue";
+import Containers from "./pages/Containers.vue";
 import Compose from "./pages/Compose.vue";
 import ContainerTerminal from "./pages/ContainerTerminal.vue";
 
@@ -58,6 +59,10 @@ const routes = [
                     {
                         path: "/console",
                         component: Console,
+                    },
+                    {
+                        path: "/containers",
+                        component: Containers,
                     },
                     {
                         path: "/console/:endpoint",
