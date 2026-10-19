@@ -364,22 +364,42 @@ export class Stack {
     }
 
     /**
-     * Convert the status string from `docker compose ls` to the status number
+     * Convert the status string from `docker compose ls` to the status number.
      * Input Example: "exited(1), running(1)"
+     *
+     * Count-based and order-independent (R1): any running container wins, so
+     * one-shot/exited sidecars never make a live stack look exited (GH #177/#474/#606/#806).
+     * Non-string or unparseable input yields UNKNOWN instead of throwing (#875).
      * @param status
      */
     static statusConvert(status : string) : number {
-        if (status.startsWith("created")) {
-            return CREATED_STACK;
-        } else if (status.includes("exited")) {
-            // If one of the service is exited, we consider the stack is exited
-            return EXITED;
-        } else if (status.startsWith("running")) {
-            // If there is no exited services, there should be only running services
-            return RUNNING;
-        } else {
+        if (typeof status !== "string") {
             return UNKNOWN;
         }
+
+        const counts = new Map<string, number>();
+        for (const segment of status.split(",")) {
+            const withCount = segment.trim().match(/^([a-z]+)\s*\((\d+)\)$/);
+            if (withCount) {
+                counts.set(withCount[1], (counts.get(withCount[1]) ?? 0) + Number(withCount[2]));
+                continue;
+            }
+            const bare = segment.trim().match(/^([a-z]+)$/);
+            if (bare) {
+                counts.set(bare[1], (counts.get(bare[1]) ?? 0) + 1);
+            }
+        }
+
+        if ((counts.get("running") ?? 0) > 0) {
+            return RUNNING;
+        }
+        if ((counts.get("exited") ?? 0) > 0) {
+            return EXITED;
+        }
+        if ((counts.get("created") ?? 0) > 0) {
+            return CREATED_STACK;
+        }
+        return UNKNOWN;
     }
 
     static async getStack(server: DockgeServer, stackName: string, skipFSOperations = false) : Promise<Stack> {
