@@ -65,7 +65,10 @@ describe("Stack.getStack", () => {
     });
 
     afterAll(() => {
-        fs.rmSync(tmp, { recursive: true, force: true });
+        fs.rmSync(tmp, {
+            recursive: true,
+            force: true,
+        });
     });
 
     it("rejects a traversal stack name before any filesystem work", async () => {
