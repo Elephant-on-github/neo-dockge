@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { Stack } from "./stack";
 import { CREATED_STACK, EXITED, RUNNING, UNKNOWN } from "../common/util-common";
 import { DockgeServer } from "./dockge-server";
@@ -72,7 +72,8 @@ describe("stack list failure containment", () => {
     });
 
     afterAll(() => {
-        fs.rmSync(stacksDir, { recursive: true, force: true });
+        fs.rmSync(stacksDir, { recursive: true,
+            force: true });
     });
 
     beforeEach(() => {
@@ -108,9 +109,15 @@ describe("stack list failure containment", () => {
     it("E: a malformed entry shows unknown without affecting siblings (acceptance 3)", async () => {
         spawnMock.mockResolvedValueOnce({
             stdout: JSON.stringify([
-                { Name: "beta", Status: "running(2)", ConfigFiles: path.join(stacksDir, "beta", "compose.yaml") },
-                { Name: "alpha", Status: 12345, ConfigFiles: path.join(stacksDir, "alpha", "compose.yaml") },
-                { Name: "gamma", Status: "exited(3)", ConfigFiles: path.join(stacksDir, "elsewhere", "compose.yaml") },
+                { Name: "beta",
+                    Status: "running(2)",
+                    ConfigFiles: path.join(stacksDir, "beta", "compose.yaml") },
+                { Name: "alpha",
+                    Status: 12345,
+                    ConfigFiles: path.join(stacksDir, "alpha", "compose.yaml") },
+                { Name: "gamma",
+                    Status: "exited(3)",
+                    ConfigFiles: path.join(stacksDir, "elsewhere", "compose.yaml") },
             ]),
         });
         const list = await Stack.getStackList(fakeServer(stacksDir));
@@ -122,13 +129,148 @@ describe("stack list failure containment", () => {
     it("F: a null entry in compose ls output does not blank the list", async () => {
         spawnMock.mockResolvedValueOnce({
             stdout: JSON.stringify([
-                { Name: "beta", Status: "running(2)", ConfigFiles: path.join(stacksDir, "beta", "compose.yaml") },
+                { Name: "beta",
+                    Status: "running(2)",
+                    ConfigFiles: path.join(stacksDir, "beta", "compose.yaml") },
                 null,
-                { Name: "alpha", Status: "exited(1)", ConfigFiles: path.join(stacksDir, "alpha", "compose.yaml") },
+                { Name: "alpha",
+                    Status: "exited(1)",
+                    ConfigFiles: path.join(stacksDir, "alpha", "compose.yaml") },
             ]),
         });
         const list = await Stack.getStackList(fakeServer(stacksDir));
         expect(list.get("beta")?.status).toBe(RUNNING);
         expect(list.get("alpha")?.status).toBe(EXITED);
+    });
+});
+
+describe("Stack.resolveManagedFolder (R3)", () => {
+    const stacksDir = path.join(os.tmpdir(), "fake-stacks");
+
+    it("returns the direct-child folder name", () => {
+        expect(Stack.resolveManagedFolder(stacksDir, path.join(stacksDir, "my-stack", "compose.yaml"))).toBe("my-stack");
+    });
+
+    it("rejects deeper paths (not a stack folder)", () => {
+        expect(Stack.resolveManagedFolder(stacksDir, path.join(stacksDir, "my-stack", "sub", "compose.yaml"))).toBeUndefined();
+    });
+
+    it("rejects config files outside stacksDir", () => {
+        expect(Stack.resolveManagedFolder(stacksDir, path.join(os.tmpdir(), "elsewhere", "compose.yaml"))).toBeUndefined();
+    });
+
+    it("rejects undefined, non-string, and empty config files", () => {
+        expect(Stack.resolveManagedFolder(stacksDir, undefined)).toBeUndefined();
+        expect(Stack.resolveManagedFolder(stacksDir, 123)).toBeUndefined();
+        expect(Stack.resolveManagedFolder(stacksDir, "")).toBeUndefined();
+    });
+
+    it("uses the first path of a multi-file ConfigFiles list", () => {
+        const first = path.join(stacksDir, "a", "compose.yaml");
+        const second = path.join(stacksDir, "b", "docker-compose.yml");
+        expect(Stack.resolveManagedFolder(stacksDir, first + ", " + second)).toBe("a");
+    });
+});
+
+describe("config-path join for managed truth", () => {
+    let stacksDir: string;
+    let foreignDir: string;
+
+    beforeAll(() => {
+        stacksDir = fs.mkdtempSync(path.join(os.tmpdir(), "neo-dockge-join-"));
+        foreignDir = fs.mkdtempSync(path.join(os.tmpdir(), "neo-dockge-foreign-"));
+        for (const name of [ "alpha", "beta" ]) {
+            fs.mkdirSync(path.join(stacksDir, name));
+            fs.writeFileSync(path.join(stacksDir, name, "compose.yaml"), "services:\n  web:\n    image: nginx\n");
+        }
+    });
+
+    afterAll(() => {
+        fs.rmSync(stacksDir, { recursive: true,
+            force: true });
+        fs.rmSync(foreignDir, { recursive: true,
+            force: true });
+    });
+
+    beforeEach(() => {
+        spawnMock.mockReset();
+    });
+
+    it("G: joins a renamed compose project to its stack folder (#19 repro)", async () => {
+        spawnMock.mockResolvedValueOnce({
+            stdout: JSON.stringify([
+                {
+                    Name: "renamed-proj",
+                    Status: "exited(1), running(1)",
+                    ConfigFiles: path.join(stacksDir, "alpha", "compose.yaml"),
+                },
+            ]),
+        });
+        const list = await Stack.getStackList(fakeServer(stacksDir));
+        expect(list.has("renamed-proj")).toBe(false);
+        const alpha = list.get("alpha");
+        expect(alpha?.status).toBe(RUNNING);
+        expect(alpha?.toSimpleJSON("")).toMatchObject({ name: "alpha",
+            isManagedByDockge: true,
+            status: RUNNING });
+    });
+
+    it("H: keeps a genuinely foreign project as an unmanaged grey row", async () => {
+        spawnMock.mockResolvedValueOnce({
+            stdout: JSON.stringify([
+                { Name: "foreign-proj",
+                    Status: "running(1)",
+                    ConfigFiles: path.join(foreignDir, "compose.yaml") },
+            ]),
+        });
+        const list = await Stack.getStackList(fakeServer(stacksDir));
+        expect(list.get("foreign-proj")?.toSimpleJSON("")).toMatchObject({ name: "foreign-proj",
+            isManagedByDockge: false });
+    });
+
+    it("I: never lists the manager's own projects (R4 self-skip)", async () => {
+        spawnMock.mockResolvedValueOnce({
+            stdout: JSON.stringify([
+                { Name: "neo-dockge",
+                    Status: "running(1)",
+                    ConfigFiles: path.join(foreignDir, "compose.yaml") },
+                { Name: "dockge",
+                    Status: "running(1)",
+                    ConfigFiles: path.join(foreignDir, "compose.yaml") },
+            ]),
+        });
+        const list = await Stack.getStackList(fakeServer(stacksDir));
+        expect(list.has("neo-dockge")).toBe(false);
+        expect(list.has("dockge")).toBe(false);
+    });
+
+    it("J: getStatusList exposes both project and folder keys when given stacksDir", async () => {
+        spawnMock.mockResolvedValueOnce({
+            stdout: JSON.stringify([
+                {
+                    Name: "renamed-proj",
+                    Status: "running(2)",
+                    ConfigFiles: path.join(stacksDir, "alpha", "compose.yaml"),
+                },
+            ]),
+        });
+        const statuses = await Stack.getStatusList(stacksDir);
+        expect(statuses.get("renamed-proj")).toBe(RUNNING);
+        expect(statuses.get("alpha")).toBe(RUNNING);
+    });
+
+    it("J2: getStatusList without stacksDir keeps name-only keys (back-compat)", async () => {
+        spawnMock.mockResolvedValueOnce({
+            stdout: JSON.stringify([
+                {
+                    Name: "renamed-proj",
+                    Status: "running(2)",
+                    ConfigFiles: path.join(stacksDir, "alpha", "compose.yaml"),
+                },
+            ]),
+        });
+        const statuses = await Stack.getStatusList();
+        expect(statuses.get("renamed-proj")).toBe(RUNNING);
+        expect(statuses.has("alpha")).toBe(false);
     });
 });

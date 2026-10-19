@@ -240,7 +240,7 @@ export class Stack {
     }
 
     async updateStatus() {
-        let statusList = await Stack.getStatusList();
+        let statusList = await Stack.getStatusList(this.server.stacksDir);
         let status = statusList.get(this.name);
 
         if (status) {
@@ -336,10 +336,19 @@ export class Stack {
                 try {
                     let stack = stackList.get(composeStack.Name);
 
-                    // This stack probably is not managed by Dockge, but we still want to show it
+                    // Project name can differ from the folder name (`name:` key, -p,
+                    // normalization) - join by config path instead of declaring the
+                    // folder stack "not managed" (#19/#359/#509).
                     if (!stack) {
-                        // Skip the dockge stack if it is not managed by Dockge
-                        if (composeStack.Name === "dockge") {
+                        const folder = this.resolveManagedFolder(stacksDir, composeStack.ConfigFiles);
+                        if (folder) {
+                            stack = stackList.get(folder);
+                        }
+                    }
+
+                    if (!stack) {
+                        // Skip our own stack if it is not managed by Dockge (R4)
+                        if (composeStack.Name === "dockge" || composeStack.Name === "neo-dockge") {
                             continue;
                         }
                         stack = new Stack(server, composeStack.Name);
@@ -368,7 +377,13 @@ export class Stack {
      * Get the status list, it will be used to update the status of the stacks
      * Not all status will be returned, only the stack that is deployed or created to `docker compose` will be returned
      */
-    static async getStatusList() : Promise<Map<string, number>> {
+    /**
+     * Get the status list, it will be used to update the status of the stacks
+     * Not all status will be returned, only the stack that is deployed or created to `docker compose` will be returned
+     * @param stacksDir when given, entries are keyed by BOTH project name and resolved
+     *                  folder name, so name-mismatch stacks resolve via updateStatus (R6)
+     */
+    static async getStatusList(stacksDir? : string) : Promise<Map<string, number>> {
         let statusList = new Map<string, number>();
 
         try {
@@ -388,7 +403,14 @@ export class Stack {
 
             for (let composeStack of composeList) {
                 try {
-                    statusList.set(composeStack.Name, this.statusConvert(composeStack.Status));
+                    const status = this.statusConvert(composeStack.Status);
+                    statusList.set(composeStack.Name, status);
+                    if (stacksDir) {
+                        const folder = this.resolveManagedFolder(stacksDir, composeStack.ConfigFiles);
+                        if (folder && folder !== composeStack.Name) {
+                            statusList.set(folder, status);
+                        }
+                    }
                 } catch (e) {
                     if (e instanceof Error) {
                         log.warn("getStatusList", `Failed to process a compose ls entry, error: ${e.message}`);
@@ -403,6 +425,31 @@ export class Stack {
         }
 
         return statusList;
+    }
+
+    /**
+     * R3: a compose project belongs to a stack folder when its config file lives
+     * directly under stacksDir/<name>. This outlasts project-name ≠ folder-name
+     * mismatches (`name:` key, -p, normalization) that made dockge-created stacks
+     * render as duplicate "not managed" rows (GH #19/#359/#509).
+     * @param stacksDir absolute stacks directory
+     * @param configFiles raw ConfigFiles value from `docker compose ls` (may be comma-separated)
+     * @returns the direct-child folder name, or undefined if not directly under stacksDir
+     */
+    static resolveManagedFolder(stacksDir : string, configFiles? : unknown) : string | undefined {
+        if (typeof configFiles !== "string" || configFiles.length === 0) {
+            return undefined;
+        }
+        const first = configFiles.split(",")[0].trim();
+        if (!first) {
+            return undefined;
+        }
+        const dir = path.dirname(path.normalize(first));
+        const rel = path.relative(path.normalize(stacksDir), dir);
+        if (rel === "" || rel.startsWith("..") || path.isAbsolute(rel) || rel.includes(path.sep)) {
+            return undefined;
+        }
+        return rel;
     }
 
     /**
