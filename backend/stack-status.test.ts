@@ -274,3 +274,24 @@ describe("config-path join for managed truth", () => {
         expect(statuses.has("alpha")).toBe(false);
     });
 });
+
+describe("Stack.isManagedByDockge resilience (final fix pass M-4)", () => {
+    it("returns false instead of throwing when the folder vanishes between existsSync and statSync", () => {
+        const never = path.join(os.tmpdir(), "neo-dockge-never-exists");
+        const stack = new Stack(fakeServer(never), "ghost");
+        const ghostPath = path.join(never, "ghost");
+        const original = fs.existsSync;
+        // Simulate the TOCTOU race: existsSync saw the directory, statSync will not.
+        const spy = vi.spyOn(fs, "existsSync").mockImplementation((p: fs.PathLike) => {
+            if (String(p) === ghostPath) {
+                return true;
+            }
+            return original(p);
+        });
+        try {
+            expect(stack.isManagedByDockge).toBe(false);
+        } finally {
+            spy.mockRestore();
+        }
+    });
+});

@@ -104,7 +104,14 @@ export class Stack {
     }
 
     get isManagedByDockge() : boolean {
-        return fs.existsSync(this.path) && fs.statSync(this.path).isDirectory();
+        try {
+            return fs.statSync(this.path).isDirectory();
+        } catch {
+            // The folder can vanish between scans (concurrent rm): a throw here would
+            // escape toSimpleJSON -> sendStackList -> the unguarded 10s cron and crash
+            // the process - dimmed row instead (final review M-4, re-graded by effect).
+            return false;
+        }
     }
 
     get status() : number {
@@ -376,10 +383,6 @@ export class Stack {
     /**
      * Get the status list, it will be used to update the status of the stacks
      * Not all status will be returned, only the stack that is deployed or created to `docker compose` will be returned
-     */
-    /**
-     * Get the status list, it will be used to update the status of the stacks
-     * Not all status will be returned, only the stack that is deployed or created to `docker compose` will be returned
      * @param stacksDir when given, entries are keyed by BOTH project name and resolved
      *                  folder name, so name-mismatch stacks resolve via updateStatus (R6)
      */
@@ -398,6 +401,7 @@ export class Stack {
             let composeList = JSON.parse(res.stdout.toString());
 
             if (!Array.isArray(composeList)) {
+                log.warn("getStatusList", "Unexpected docker compose ls output");
                 return statusList;
             }
 
