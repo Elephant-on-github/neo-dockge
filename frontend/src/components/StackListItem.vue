@@ -3,6 +3,8 @@
         <Uptime :stack="stack" :fixed-width="true" class="me-2" />
         <div class="title">
             <span>{{ stackName }}</span>
+            <span v-if="!stack.isManagedByDockge" class="badge bg-secondary ms-2" :title="$t('notManagedHint')">{{
+                $t("external") }}</span>
         </div>
     </router-link>
 </template>

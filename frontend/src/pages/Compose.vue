@@ -237,6 +237,7 @@
 
             <div v-if="!stack.isManagedByDockge && !processing">
                 {{ $t("stackNotManagedByDockgeMsg") }}
+                <span class="ms-1 text-muted">{{ $t("notManagedHint") }}</span>
             </div>
 
             <!-- Delete Dialog -->

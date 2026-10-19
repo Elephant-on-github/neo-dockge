@@ -23,6 +23,7 @@
     "autoRefresh": "Auto refresh",
     "refresh": "Refresh",
     "noContainers": "No containers found.",
+    "notManagedHint": "Move the compose file into the neo-dockge stacks directory to make it editable.",
     "registry": "Registry",
     "compose": "Compose",
     "addFirstStackMsg": "Compose your first stack!",
