@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Prevent file change
-        uses: xalvarez/prevent-file-change-action@v1
+        uses: xalvarez/prevent-file-change-action@6cf37e7e76e99158850832ceaff043a244e3a022 # v1
         with:
           githubToken: ${{ secrets.GITHUB_TOKEN }}
           # Regex, /src/lang/*.json is not allowed to be changed, except for /src/lang/en.json
