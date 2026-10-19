@@ -23,6 +23,10 @@
                                 <h3>{{ $t("inactive") }}</h3>
                                 <span class="num inactive">{{ inactiveNum }}</span>
                             </div>
+                            <div class="col">
+                                <h3>{{ $t("degraded") }}</h3>
+                                <span class="num degraded">{{ degradedNum }}</span>
+                            </div>
                         </div>
                     </div>
 
@@ -156,6 +160,9 @@ export default {
         },
         inactiveNum() {
             return this.getStatusNum("inactive");
+        },
+        degradedNum() {
+            return this.getStatusNum("degraded");
         },
         exitedNum() {
             return this.getStatusNum("exited");

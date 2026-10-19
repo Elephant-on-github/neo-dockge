@@ -261,7 +261,8 @@ import {
     getCombinedTerminalName,
     getComposeTerminalName,
     PROGRESS_TERMINAL_ROWS,
-    RUNNING
+    RUNNING,
+    DEGRADED
 } from "../../../common/util-common";
 import { BModal } from "bootstrap-vue-next";
 import NetworkInput from "../components/NetworkInput.vue";
@@ -395,7 +396,7 @@ export default {
         },
 
         active() {
-            return this.status === RUNNING;
+            return this.status === RUNNING || this.status === DEGRADED;
         },
 
         terminalName() {
