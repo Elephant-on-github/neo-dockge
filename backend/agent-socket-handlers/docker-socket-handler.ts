@@ -256,6 +256,21 @@ export class DockerSocketHandler extends AgentSocketHandler {
             }
         });
 
+        // Host-wide container list with live stats (1.6.3)
+        agentSocket.on("requestContainerList", async (callback) => {
+            try {
+                checkLogin(socket);
+
+                const containerList = await Stack.getContainerList(server.stacksDir);
+                callbackResult({
+                    ok: true,
+                    containerList,
+                }, callback);
+            } catch (e) {
+                callbackError(e, callback);
+            }
+        });
+
         // Start a service
         agentSocket.on("startService", async (stackName: unknown, serviceName: unknown, callback) => {
             try {
