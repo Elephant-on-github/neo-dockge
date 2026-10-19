@@ -170,7 +170,7 @@
                     <h4 class="mb-3">{{ stack.composeFileName }}</h4>
 
                     <!-- YAML editor -->
-                    <div class="shadow-box mb-3 editor-box" :class="{'edit-mode' : isEditMode}">
+                    <div class="shadow-box mb-3 editor-box" :class="{'edit-mode' : isEditMode, 'maximized': yamlMaximized}">
                         <code-mirror
                             ref="editor"
                             v-model="stack.composeYAML"
@@ -185,6 +185,7 @@
                     </div>
                     <div v-if="isEditMode" class="mb-3">
                         <button class="btn btn-sm btn-secondary me-2" @click="formatYAML">Format</button>
+                        <button class="btn btn-sm btn-secondary" @click="yamlMaximized = !yamlMaximized">{{ yamlMaximized ? "Exit maximize" : "Maximize" }}</button>
                     </div>
                     <div v-if="isEditMode" class="mb-3">
                         {{ yamlError }}
@@ -254,6 +255,7 @@ import { dracula as editorTheme } from "thememirror";
 import { lineNumbers, EditorView, keymap } from "@codemirror/view";
 import { linter, lintGutter } from "@codemirror/lint";
 import { search, searchKeymap } from "@codemirror/search";
+import { toggleComment } from "@codemirror/commands";
 import { parseDocument, Document } from "yaml";
 
 import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
@@ -355,7 +357,10 @@ export default {
             search(),
             keymap.of(searchKeymap),
             EditorView.lineWrapping,
-            EditorView.focusChangeEffect.of(focusEffectHandler)
+            EditorView.focusChangeEffect.of(focusEffectHandler),
+            keymap.of([{ key: "Mod-Shift-:",
+                run: toggleComment,
+                preventDefault: true }])
         ];
 
         const extensionsEnv = [
@@ -367,7 +372,10 @@ export default {
             search(),
             keymap.of(searchKeymap),
             EditorView.lineWrapping,
-            EditorView.focusChangeEffect.of(focusEffectHandler)
+            EditorView.focusChangeEffect.of(focusEffectHandler),
+            keymap.of([{ key: "Mod-Shift-:",
+                run: toggleComment,
+                preventDefault: true }])
         ];
 
         return { extensions,
@@ -380,6 +388,7 @@ export default {
             jsonConfig: {},
             envsubstJSONConfig: {},
             yamlError: "",
+            yamlMaximized: false,
             processing: true,
             showProgressTerminal: false,
             progressTerminalRows: PROGRESS_TERMINAL_ROWS,
@@ -950,6 +959,18 @@ export default {
 .editor-box {
     font-family: 'JetBrains Mono', monospace;
     font-size: 14px;
+    resize: vertical;
+    overflow: auto;
+    min-height: 120px;
+}
+
+.editor-box.maximized {
+    position: fixed;
+    inset: 1rem;
+    z-index: 1050;
+    margin: 0;
+    min-height: 0;
+    resize: none;
 }
 
 .agent-name {
