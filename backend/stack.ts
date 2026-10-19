@@ -611,7 +611,7 @@ export class Stack {
             const res = await childProcessAsync.spawn("docker", [ "ps", "-a", "--format", "{{json .}}" ], {
                 encoding: "utf-8",
             });
-            psEntries = this.parseNdjson(res?.stdout?.toString());
+            psEntries = this.parseNdjson<{ ID? : string, Names? : string, Image? : string, State? : string, Status? : string, HealthStatus? : string, Labels? : string }>(res?.stdout?.toString());
         } catch (e) {
             log.warn("getContainerList", `Failed to list containers: ${(e as Error).message}`);
             return [];
@@ -622,7 +622,7 @@ export class Stack {
             const res = await childProcessAsync.spawn("docker", [ "stats", "--no-stream", "--format", "{{json .}}" ], {
                 encoding: "utf-8",
             });
-            statsEntries = this.parseNdjson(res?.stdout?.toString());
+            statsEntries = this.parseNdjson<{ ID? : string, Name? : string, CPUPerc? : string, MemUsage? : string, MemPerc? : string, NetIO? : string, BlockIO? : string, PIDs? : string }>(res?.stdout?.toString());
         } catch (e) {
             // Stats are a nice-to-have: keep the container list.
             log.warn("getContainerList", `Failed to get container stats: ${(e as Error).message}`);
@@ -682,17 +682,17 @@ export class Stack {
     /**
      * Parse NDJSON output into objects, skipping unparseable lines.
      */
-    private static parseNdjson(output : string | undefined) : any[] {
+    private static parseNdjson<T>(output : string | undefined) : T[] {
         if (typeof output !== "string") {
             return [];
         }
-        const result : any[] = [];
+        const result : T[] = [];
         for (let line of output.split("\n")) {
             if (!line.trim()) {
                 continue;
             }
             try {
-                result.push(JSON.parse(line));
+                result.push(JSON.parse(line) as T);
             } catch {
                 // skip malformed line
             }
