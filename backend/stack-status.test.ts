@@ -452,6 +452,80 @@ describe("getStatusList crash-warning wiring (F1)", () => {
     });
 });
 
+// F1 wiring: getStackList is the path the UI actually renders
+// (dockge-server sendStackList -> getStackList with cache). Warnings are
+// fetched strictly after the compose-ls spawn: single-response mocks in the
+// older tests pin that order.
+describe("getStackList crash-warning wiring (F1)", () => {
+    let stacksDir: string;
+
+    beforeAll(() => {
+        stacksDir = fs.mkdtempSync(path.join(os.tmpdir(), "neo-dockge-warnlist-"));
+        for (const name of [ "alpha", "beta" ]) {
+            fs.mkdirSync(path.join(stacksDir, name));
+            fs.writeFileSync(path.join(stacksDir, name, "compose.yaml"), "services:\n  web:\n    image: nginx\n");
+        }
+    });
+
+    afterAll(() => {
+        fs.rmSync(stacksDir, { recursive: true,
+            force: true });
+    });
+
+    beforeEach(() => {
+        spawnMock.mockReset();
+    });
+
+    const composeLs = (entries : object[]) => ({ stdout: JSON.stringify(entries) });
+    const psLine = (over : object) => JSON.stringify({
+        State: "running",
+        Status: "Up 2 minutes",
+        Labels: "com.docker.compose.project=x",
+        ...over,
+    });
+
+    it("marks a folder stack DEGRADED via its project's crashed container", async () => {
+        spawnMock.mockResolvedValueOnce(composeLs([ {
+            Name: "beta",
+            Status: "exited(1), running(2)",
+            ConfigFiles: path.join(stacksDir, "beta", "compose.yaml"),
+        } ]));
+        spawnMock.mockResolvedValueOnce({ stdout: psLine({
+            State: "exited",
+            Status: "Exited (137)",
+            Labels: "com.docker.compose.project=beta",
+        }) });
+        const list = await Stack.getStackList(fakeServer(stacksDir));
+        expect(list.get("beta")?.status).toBe(DEGRADED);
+    });
+
+    it("renamed projects carry the warn to the joined folder stack", async () => {
+        spawnMock.mockResolvedValueOnce(composeLs([ {
+            Name: "renamed-proj",
+            Status: "exited(1), running(2)",
+            ConfigFiles: path.join(stacksDir, "alpha", "compose.yaml"),
+        } ]));
+        spawnMock.mockResolvedValueOnce({ stdout: psLine({
+            State: "exited",
+            Status: "Exited (137)",
+            Labels: "com.docker.compose.project=renamed-proj",
+        }) });
+        const list = await Stack.getStackList(fakeServer(stacksDir));
+        expect(list.get("alpha")?.status).toBe(DEGRADED);
+    });
+
+    it("falls back to compose-ls-only status when docker ps fails (R3)", async () => {
+        spawnMock.mockResolvedValueOnce(composeLs([ {
+            Name: "beta",
+            Status: "exited(1), running(2)",
+            ConfigFiles: path.join(stacksDir, "beta", "compose.yaml"),
+        } ]));
+        spawnMock.mockRejectedValueOnce(new Error("docker daemon down"));
+        const list = await Stack.getStackList(fakeServer(stacksDir));
+        expect(list.get("beta")?.status).toBe(RUNNING);
+    });
+});
+
 describe("Stack.isManagedByDockge resilience (final fix pass M-4)", () => {
     it("returns false instead of throwing when the folder vanishes between existsSync and statSync", () => {
         const never = path.join(os.tmpdir(), "neo-dockge-never-exists");

@@ -340,6 +340,10 @@ export class Stack {
                 throw new Error("Unexpected docker compose ls output");
             }
 
+            // F1: crash warnings come from one extra global docker ps, strictly
+            // after the compose-ls spawn; getContainerWarnings never rejects (R3).
+            const warnings = await this.getContainerWarnings();
+
             for (let composeStack of composeList) {
                 try {
                     let stack = stackList.get(composeStack.Name);
@@ -363,7 +367,7 @@ export class Stack {
                         stackList.set(composeStack.Name, stack);
                     }
 
-                    stack._status = this.statusConvert(composeStack.Status);
+                    stack._status = this.statusConvert(composeStack.Status, warnings.get(composeStack.Name));
                     stack._configFilePath = composeStack.ConfigFiles;
                 } catch (e) {
                     // One malformed entry must not blank the list: log and keep the siblings.
