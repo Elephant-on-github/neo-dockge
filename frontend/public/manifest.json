@@ -1,6 +1,6 @@
 {
-    "name": "Dockge",
-    "short_name": "Dockge",
+    "name": "neo-dockge",
+    "short_name": "neo-dockge",
     "start_url": "/",
     "background_color": "#fff",
     "display": "standalone",

@@ -2,7 +2,9 @@
     <img src="./frontend/public/icon.svg" width="128" alt="" />
 </div>
 
-# Dockge
+# neo-dockge
+
+> Maintained fork of [Dockge](https://github.com/louislam/dockge) by Louis Lam. Original work is © Louis Lam under the MIT License.
 
 A fancy, easy-to-use and reactive self-hosted docker compose.yaml stack-oriented manager.
 
