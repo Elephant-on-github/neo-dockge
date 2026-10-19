@@ -176,7 +176,6 @@
                             v-model="stack.composeYAML"
                             :extensions="extensions"
                             minimal
-                            wrap="true"
                             dark="true"
                             tab="true"
                             :disabled="!isEditMode"
@@ -197,7 +196,6 @@
                                 v-model="stack.composeENV"
                                 :extensions="extensionsEnv"
                                 minimal
-                                wrap="true"
                                 dark="true"
                                 tab="true"
                                 :disabled="!isEditMode"
@@ -250,7 +248,9 @@ import CodeMirror from "vue-codemirror6";
 import { yaml } from "@codemirror/lang-yaml";
 import { python } from "@codemirror/lang-python";
 import { dracula as editorTheme } from "thememirror";
-import { lineNumbers, EditorView } from "@codemirror/view";
+import { lineNumbers, EditorView, keymap } from "@codemirror/view";
+import { linter, lintGutter } from "@codemirror/lint";
+import { search, searchKeymap } from "@codemirror/search";
 import { parseDocument, Document } from "yaml";
 
 import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
@@ -305,10 +305,53 @@ export default {
             return null;
         };
 
+        const yamlLinter = (view) => {
+            const diagnostics = [];
+            try {
+                const doc = parseDocument(view.state.doc.toString());
+                if (doc.errors && doc.errors.length > 0) {
+                    for (const err of doc.errors) {
+                        let from = 0;
+                        let to = 0;
+                        try {
+                            const pos = err.linePos && err.linePos[0];
+                            if (pos) {
+                                const lineNo = Math.min(Math.max(pos.line, 1), view.state.doc.lines);
+                                const line = view.state.doc.line(lineNo);
+                                from = Math.min(line.from + Math.max(pos.col - 1, 0), view.state.doc.length);
+                                to = Math.min(from + 1, view.state.doc.length);
+                            } else if (typeof err.pos === "number") {
+                                from = Math.min(err.pos, view.state.doc.length);
+                                to = Math.min(from + 1, view.state.doc.length);
+                            }
+                        } catch (e) {
+                            from = 0;
+                            to = 0;
+                        }
+                        diagnostics.push({
+                            from,
+                            to,
+                            severity: "error",
+                            message: err.message,
+                            source: "yaml",
+                        });
+                    }
+                }
+            } catch (e) {
+                // fail soft: no squiggle, text message still surfaces via yamlCodeChange
+            }
+            return diagnostics;
+        };
+
         const extensions = [
             editorTheme,
             yaml(),
             lineNumbers(),
+            lintGutter(),
+            linter(yamlLinter, { delay: 750 }),
+            search(),
+            keymap.of(searchKeymap),
+            EditorView.lineWrapping,
             EditorView.focusChangeEffect.of(focusEffectHandler)
         ];
 
@@ -316,6 +359,11 @@ export default {
             editorTheme,
             python(),
             lineNumbers(),
+            lintGutter(),
+            linter(yamlLinter, { delay: 750 }),
+            search(),
+            keymap.of(searchKeymap),
+            EditorView.lineWrapping,
             EditorView.focusChangeEffect.of(focusEffectHandler)
         ];
 
