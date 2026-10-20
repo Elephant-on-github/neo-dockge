@@ -62,6 +62,30 @@ jobs:
           VERSION: ${{ github.ref_name }}
         run: npm run build:docker
 
+      # ":latest" must point at the version that was just released, otherwise
+      # `docker pull ...:latest` keeps serving the previous release.
+      - name: Verify the latest tag points at the released version
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          set -uo pipefail
+          digest_of() {
+            docker buildx imagetools inspect "$1" 2>/dev/null | awk '/^Digest:/ {print $2; exit}'
+          }
+          released=""
+          for i in $(seq 1 12); do
+            released=$(digest_of "ghcr.io/${{ github.repository }}:$VERSION")
+            latest=$(digest_of "ghcr.io/${{ github.repository }}:latest")
+            if [ -n "$released" ] && [ "$released" = "$latest" ]; then
+              echo "latest and $VERSION both resolve to $released"
+              exit 0
+            fi
+            echo "attempt $i: latest=$latest released=$released (registry may still be propagating)"
+            sleep 10
+          done
+          echo "::error::latest does not point at the released version $VERSION"
+          exit 1
+
       # The backend update checker reads this fork's latest release.
       - name: Create GitHub Release
         env:
