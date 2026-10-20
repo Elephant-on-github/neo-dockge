@@ -23,22 +23,22 @@ function getTimezoneOffset(timeZone : string) {
 
 /**
  * The timezones-list package is CommonJS and its export shape differs
- * between the bundler's interop and plain node: it can arrive as the array
- * itself or wrapped in another `default` (so the array sits two levels
- * deep). Normalize both, and never throw - a broken timezone list must
- * not take a page down with it.
+ * between the bundler's interop and plain node: the array can arrive
+ * directly, or wrapped in one or more `default` layers. Unwrap until the
+ * array shows up, and never throw - a broken timezone list must not take a
+ * page down with it.
  * @returns {object[]} The raw timezone entries, or an empty list.
  */
 function getTimezoneEntries() {
-    const raw = timezones as unknown;
-    if (Array.isArray(raw)) {
-        return raw as { tzCode: string }[];
-    }
-    if (raw && typeof raw === "object") {
-        const inner = (raw as { default?: unknown }).default;
-        if (Array.isArray(inner)) {
-            return inner as { tzCode: string }[];
+    let value : unknown = timezones;
+    for (let i = 0; i < 4; i++) {
+        if (Array.isArray(value)) {
+            return value as { tzCode: string }[];
         }
+        if (!value || typeof value !== "object") {
+            break;
+        }
+        value = (value as { default?: unknown }).default;
     }
     return [];
 }
