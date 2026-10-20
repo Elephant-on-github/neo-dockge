@@ -1,6 +1,7 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { Stack } from "./stack";
 import { Terminal } from "./terminal";
+import { getDockerApiVersion, getDockerBinary, getDockerEnv } from "./util-server";
 import type { DockgeSocket } from "./util-server";
 import { CREATED_STACK, DEGRADED, EXITED, RUNNING, UNKNOWN, statusColor, statusName, statusNameShort } from "../common/util-common";
 import { DockgeServer } from "./dockge-server";
@@ -805,6 +806,60 @@ describe("Stack.getContainerList (1.6.3)", () => {
         spawnMock.mockRejectedValueOnce(new Error("docker daemon down"));
         spawnMock.mockResolvedValueOnce({ stdout: "" });
         expect(await Stack.getContainerList(stacksDir)).toEqual([]);
+    });
+});
+
+describe("docker binary + api version configuration (P4 #424/#361/#935)", () => {
+    const oldPath = process.env.DOCKGE_DOCKER_PATH;
+    const oldApi = process.env.DOCKGE_DOCKER_API_VERSION;
+    const oldDockerPath = process.env.DOCKER_PATH;
+    const oldDockerApi = process.env.DOCKER_API_VERSION;
+
+    afterEach(() => {
+        process.env.DOCKGE_DOCKER_PATH = oldPath;
+        process.env.DOCKGE_DOCKER_API_VERSION = oldApi;
+        process.env.DOCKER_PATH = oldDockerPath;
+        process.env.DOCKER_API_VERSION = oldDockerApi;
+        if (oldPath === undefined) delete process.env.DOCKGE_DOCKER_PATH;
+        if (oldApi === undefined) delete process.env.DOCKGE_DOCKER_API_VERSION;
+        if (oldDockerPath === undefined) delete process.env.DOCKER_PATH;
+        if (oldDockerApi === undefined) delete process.env.DOCKER_API_VERSION;
+    });
+
+    it("defaults to docker", () => {
+        delete process.env.DOCKGE_DOCKER_PATH;
+        delete process.env.DOCKER_PATH;
+        expect(getDockerBinary()).toBe("docker");
+    });
+
+    it("prefers DOCKGE_DOCKER_PATH, then DOCKER_PATH", () => {
+        process.env.DOCKER_PATH = "/usr/local/bin/docker";
+        expect(getDockerBinary()).toBe("/usr/local/bin/docker");
+        process.env.DOCKGE_DOCKER_PATH = "/opt/docker/bin/docker";
+        expect(getDockerBinary()).toBe("/opt/docker/bin/docker");
+    });
+
+    it("returns the pinned API version and passes it to the child env", () => {
+        delete process.env.DOCKER_API_VERSION;
+        delete process.env.DOCKGE_DOCKER_API_VERSION;
+        expect(getDockerApiVersion()).toBeUndefined();
+        expect(getDockerEnv().DOCKER_API_VERSION).toBeUndefined();
+
+        process.env.DOCKGE_DOCKER_API_VERSION = "1.41";
+        expect(getDockerApiVersion()).toBe("1.41");
+        expect(getDockerEnv().DOCKER_API_VERSION).toBe("1.41");
+    });
+
+    it("uses the configured docker binary for the container spawns", async () => {
+        process.env.DOCKGE_DOCKER_PATH = "/opt/docker/bin/docker";
+        spawnMock.mockReset();
+        spawnMock.mockResolvedValueOnce({ stdout: "" });
+        await Stack.getContainerList("/tmp/stacks");
+        expect(spawnMock).toHaveBeenCalledWith(
+            "/opt/docker/bin/docker",
+            expect.any(Array),
+            expect.anything(),
+        );
     });
 });
 

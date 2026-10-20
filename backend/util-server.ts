@@ -8,6 +8,40 @@ import { verifyPassword } from "./password-hash";
 import fs from "fs";
 import { AgentManager } from "./agent-manager";
 
+/**
+ * The docker binary to call. Not every host has "docker" on the PATH:
+ * rootless docker, podman, or a custom install prefix all break the
+ * default, and the only symptom was an opaque ENOENT (#424, #361).
+ * @returns {string} The binary path to use
+ */
+export function getDockerBinary() : string {
+    return process.env.DOCKGE_DOCKER_PATH || process.env.DOCKER_PATH || "docker";
+}
+
+/**
+ * The docker API version to request, if the operator pinned one. An old
+ * daemon refuses a newer client ("client version 1.53 is too new, maximum
+ * supported API version is 1.41"), so the version can be capped here
+ * (#935).
+ * @returns {string|undefined} The API version, or undefined to let the CLI negotiate
+ */
+export function getDockerApiVersion() : string | undefined {
+    return process.env.DOCKGE_DOCKER_API_VERSION || process.env.DOCKER_API_VERSION || undefined;
+}
+
+/**
+ * Environment for a docker child process: inherits the parent env and adds
+ * the pinned API version, if any.
+ * @returns {object} The env for the child process
+ */
+export function getDockerEnv() : NodeJS.ProcessEnv {
+    const apiVersion = getDockerApiVersion();
+    if (!apiVersion) {
+        return process.env;
+    }
+    return { ...process.env, DOCKER_API_VERSION: apiVersion };
+}
+
 export interface JWTDecoded {
     username : string;
     h? : string;

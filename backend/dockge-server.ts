@@ -21,7 +21,7 @@ import { R } from "redbean-node";
 import { genSecret, isDev, LooseObject } from "../common/util-common";
 import { generatePasswordHash } from "./password-hash";
 import { Bean } from "redbean-node/dist/bean";
-import { Arguments, Config, DockgeSocket } from "./util-server";
+import { Arguments, Config, DockgeSocket, getDockerApiVersion, getDockerBinary, getDockerEnv } from "./util-server";
 import { DockerSocketHandler } from "./agent-socket-handlers/docker-socket-handler";
 import expressStaticGzip from "express-static-gzip";
 import path from "path";
@@ -383,6 +383,8 @@ export class DockgeServer {
             "jwtSecret",
         ]);
 
+        await this.checkDockerBinary();
+
         if (! jwtSecretBean) {
             log.info("server", "JWT secret is not found, generate one.");
             jwtSecretBean = await this.initJWTSecret();
@@ -582,6 +584,34 @@ export class DockgeServer {
      * Init or reset JWT secret
      * @returns  JWT secret
      */
+    /**
+     * Check that the configured docker binary exists and is usable. A
+     * missing binary used to surface as an opaque ENOENT in the middle of a
+     * stack operation; now it is reported at startup, with the path that was
+     * tried and how to change it (#424, #361).
+     * @returns {Promise<void>}
+     */
+    async checkDockerBinary() : Promise<void> {
+        const binary = getDockerBinary();
+        try {
+            const res = await childProcessAsync.spawn(binary, [ "--version" ], {
+                encoding: "utf-8",
+                env: getDockerEnv(),
+            });
+            const version = res?.stdout?.toString().trim();
+            if (version) {
+                log.info("server", `Docker binary: ${version}`);
+            }
+            const apiVersion = getDockerApiVersion();
+            if (apiVersion) {
+                log.info("server", `Docker API version pinned to ${apiVersion}`);
+            }
+        } catch (e) {
+            log.error("server", `Could not run the docker binary "${binary}": ${(e as Error).message}`);
+            log.error("server", "Set DOCKGE_DOCKER_PATH to the full path of your docker binary (e.g. /usr/local/bin/docker) if it is not on the PATH.");
+        }
+    }
+
     async initJWTSecret() : Promise<Bean> {
         let jwtSecretBean = await R.findOne("setting", " `key` = ? ", [
             "jwtSecret",
@@ -633,8 +663,9 @@ export class DockgeServer {
     }
 
     async getDockerNetworkList() : Promise<string[]> {
-        let res = await childProcessAsync.spawn("docker", [ "network", "ls", "--format", "{{.Name}}" ], {
+        let res = await childProcessAsync.spawn(getDockerBinary(), [ "network", "ls", "--format", "{{.Name}}" ], {
             encoding: "utf-8",
+        env: getDockerEnv(),
         });
 
         if (!res.stdout) {
@@ -661,8 +692,9 @@ export class DockgeServer {
             // The `json` format keyword does not: on older CLIs it renders the
             // literal text "json" per row, every parse fails, and stats come
             // back silently empty.
-            let res = await childProcessAsync.spawn("docker", [ "stats", "--no-stream", "--format", "{{json .}}" ], {
+            let res = await childProcessAsync.spawn(getDockerBinary(), [ "stats", "--no-stream", "--format", "{{json .}}" ], {
                 encoding: "utf-8",
+            env: getDockerEnv(),
             });
 
             if (!res.stdout) {
