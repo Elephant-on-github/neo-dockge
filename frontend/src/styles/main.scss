@@ -281,6 +281,21 @@ optgroup {
         }
     }
 
+    // Tables: Bootstrap's default table background comes from the light body
+    // background, so a table renders as a white block in dark mode. Make it
+    // transparent (the surrounding shadow-box provides the background) and
+    // use the dark border color.
+    .table {
+        --bs-table-bg: transparent;
+        --bs-table-color: $dark-font-color;
+        --bs-table-border-color: $dark-border-color;
+
+        th,
+        td {
+            border-color: $dark-border-color;
+        }
+    }
+
     .incident a,
     .bg-maintenance a {
         color: inherit;

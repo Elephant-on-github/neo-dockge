@@ -29,8 +29,33 @@ export default {
             height: 0
         };
     },
+    watch: {
+        // The content height changes with the page (home vs settings vs a
+        // stack detail). It was measured once on mount, so every navigation
+        // kept a stale height and the layout shifted.
+        "$route"() {
+            this.updateHeight();
+        },
+    },
     mounted() {
-        this.height = this.$refs.container.offsetHeight;
+        window.addEventListener("resize", this.updateHeight);
+        this.updateHeight();
+    },
+    beforeUnmount() {
+        window.removeEventListener("resize", this.updateHeight);
+    },
+    methods: {
+        /**
+         * Measure the content column and hand the height to the child page
+         * @returns {void}
+         */
+        updateHeight() {
+            this.$nextTick(() => {
+                if (this.$refs.container) {
+                    this.height = this.$refs.container.offsetHeight;
+                }
+            });
+        },
     },
 };
 </script>

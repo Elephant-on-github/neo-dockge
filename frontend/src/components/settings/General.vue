@@ -85,13 +85,38 @@ export default {
 
     computed: {
         settings() {
-            return this.$parent.$parent.$parent.settings;
+            // Robust lookup: the settings state lives on the Settings page
+            // component, but reaching it through a fixed number of $parent
+            // hops breaks (blank page) whenever the component tree changes
+            // (transitions, lazy routes, a different router-view depth).
+            let parent = this.$parent;
+            for (let i = 0; i < 5 && parent; i++) {
+                if (parent.settings !== undefined) {
+                    return parent.settings;
+                }
+                parent = parent.$parent;
+            }
+            return {};
         },
         saveSettings() {
-            return this.$parent.$parent.$parent.saveSettings;
+            let parent = this.$parent;
+            for (let i = 0; i < 5 && parent; i++) {
+                if (typeof parent.saveSettings === "function") {
+                    return parent.saveSettings;
+                }
+                parent = parent.$parent;
+            }
+            return () => {};
         },
         settingsLoaded() {
-            return this.$parent.$parent.$parent.settingsLoaded;
+            let parent = this.$parent;
+            for (let i = 0; i < 5 && parent; i++) {
+                if (parent.settingsLoaded !== undefined) {
+                    return parent.settingsLoaded;
+                }
+                parent = parent.$parent;
+            }
+            return false;
         },
         guessTimezone() {
             return dayjs.tz.guess();

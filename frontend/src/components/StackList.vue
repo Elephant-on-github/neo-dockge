@@ -291,12 +291,18 @@ export default {
                 this.selectedStacks = {};
             }
         },
+        "$route"() {
+            this.onRouteChange();
+        },
     },
     mounted() {
         window.addEventListener("scroll", this.onScroll);
+        window.addEventListener("resize", this.onScroll);
+        this.onScroll();
     },
     beforeUnmount() {
         window.removeEventListener("scroll", this.onScroll);
+        window.removeEventListener("resize", this.onScroll);
     },
     methods: {
         /**
@@ -309,6 +315,19 @@ export default {
             } else {
                 this.windowTop = 133;
             }
+        },
+
+        /**
+         * Reset the scroll-dependent height when the route changes. The value
+         * is only refreshed on scroll events, so navigating between pages
+         * (e.g. settings -> home) kept a stale offset and the list height -
+         * and with it the whole page layout - was off.
+         * @returns {void}
+         */
+        onRouteChange() {
+            this.$nextTick(() => {
+                this.onScroll();
+            });
         },
 
         /**
