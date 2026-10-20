@@ -13,6 +13,13 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    # Major updates are not part of the 1.6.x line: they need a dedicated
+    # migration pass (a major can change the import style or the API), so
+    # dependabot should not open them automatically.
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"
 
   # The workflow actions are pinned to commit SHAs; dependabot updates the
   # SHA and the version comment together.
