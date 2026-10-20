@@ -1,6 +1,6 @@
 {
     "name": "neo-dockge",
-    "version": "1.6.4",
+    "version": "1.6.5",
     "type": "module",
     "engines": {
         "node": ">= 22.14.0"
