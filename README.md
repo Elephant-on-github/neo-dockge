@@ -118,6 +118,61 @@ services:
       - PGID=1000 # Set the stack file/dir ownership to this group
 ```
 
+## ⚠️ Security: the docker socket is root on your host
+
+Mounting `/var/run/docker.sock` gives neo-dockge (and anything that gets code
+execution inside it) **the same privileges as root on the host**: it can start
+containers with a bind mount of `/`, read and write any file, and take over
+every other container. This is inherent to how dockge works - it talks to
+docker directly - not a bug you can configure away.
+
+What you can do:
+
+- Only expose neo-dockge to a trusted network, and put authentication in front
+  of it.
+- Use a [socket proxy](https://github.com/Tecnativa/docker-socket-proxy) if
+  you want to restrict which docker API calls are allowed.
+- Keep the neo-dockge image up to date, and do not run untrusted compose
+  files through it.
+
+## Reverse proxy (nginx / Traefik / Caddy)
+
+neo-dockge uses a websocket for live updates. A proxy that drops idle
+connections will make the UI disconnect at random intervals. Make sure the
+proxy allows a long-lived websocket and a read timeout longer than
+neo-dockge's ping interval (30 s):
+
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:5001;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_read_timeout 300s;   # longer than the 30s ping interval
+}
+```
+
+If you terminate TLS in the proxy, enable the `trustProxy` setting in
+neo-dockge (Settings -> General) so the client IP is read from
+`X-Forwarded-For`.
+
+## Environment variables
+
+| Variable | Purpose |
+|---|---|
+| `DOCKGE_STACKS_DIR` | Where the stack folders live (default `/opt/stacks`) |
+| `DOCKGE_DATA_DIR` | Where neo-dockge keeps its database (default `./data/`) |
+| `DOCKGE_PORT` | Port to listen on (default `5001`) |
+| `DOCKGE_HOSTNAME` | Hostname to bind to |
+| `DOCKGE_SSL_KEY` / `DOCKGE_SSL_CERT` | Serve HTTPS directly |
+| `DOCKGE_DOCKER_PATH` | Full path to the docker binary, when it is not on the PATH (e.g. `/usr/local/bin/docker`) |
+| `DOCKGE_DOCKER_API_VERSION` | Pin the docker API version for an older daemon (e.g. `1.41`) |
+| `DOCKGE_ENABLE_CONSOLE` | Set to `true` to enable the host terminal |
+
 ## How to Update
 
 ```bash

@@ -261,7 +261,16 @@ export class DockgeServer {
                 }
 
                 callback(null, isOriginValid);
-            }
+            },
+            // Keep the connection alive through reverse proxies that drop
+            // idle connections, and tolerate a slow pong instead of hanging
+            // up on the first missed one (#711).
+            pingInterval: 30000,
+            pingTimeout: 120000,
+            connectionStateRecovery: {
+                maxDisconnectionDuration: 120000,
+                skipMiddlewares: true,
+            },
         });
 
         this.io.on("connection", async (socket: Socket) => {
