@@ -22,6 +22,28 @@ function getTimezoneOffset(timeZone : string) {
 }
 
 /**
+ * The timezones-list package is CommonJS and its export shape differs
+ * between the bundler's interop and plain node: it can arrive as the array
+ * itself or wrapped in another `default` (so the array sits two levels
+ * deep). Normalize both, and never throw - a broken timezone list must
+ * not take a page down with it.
+ * @returns {object[]} The raw timezone entries, or an empty list.
+ */
+function getTimezoneEntries() {
+    const raw = timezones as unknown;
+    if (Array.isArray(raw)) {
+        return raw as { tzCode: string }[];
+    }
+    if (raw && typeof raw === "object") {
+        const inner = (raw as { default?: unknown }).default;
+        if (Array.isArray(inner)) {
+            return inner as { tzCode: string }[];
+        }
+    }
+    return [];
+}
+
+/**
  * Returns a list of timezones sorted by their offset from UTC.
  * @returns {object[]} A list of the given timezones sorted by their offset from UTC.
  *
@@ -30,7 +52,7 @@ function getTimezoneOffset(timeZone : string) {
 export function timezoneList() {
     let result = [];
 
-    for (let timezone of timezones) {
+    for (let timezone of getTimezoneEntries()) {
         try {
             let display = dayjs().tz(timezone.tzCode).format("Z");
 

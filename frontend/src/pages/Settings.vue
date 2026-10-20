@@ -43,8 +43,6 @@
 </template>
 
 <script>
-import { useRoute } from "vue-router";
-
 export default {
     data() {
         return {
@@ -56,7 +54,12 @@ export default {
 
     computed: {
         currentPage() {
-            let pathSplit = useRoute().path.split("/");
+            // this.$route, not useRoute(): useRoute() relies on inject() and
+            // only works during setup(). Calling it from a computed (i.e.
+            // during render) returned undefined and threw
+            // "Cannot read properties of undefined (reading 'path')", which
+            // blanked the whole settings page.
+            let pathSplit = this.$route.path.split("/");
             let pathEnd = pathSplit[pathSplit.length - 1];
             if (!pathEnd || pathEnd === "settings") {
                 return null;

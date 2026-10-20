@@ -79,11 +79,19 @@ export default {
 
     data() {
         return {
-            timezoneList: timezoneList(),
         };
     },
 
     computed: {
+        /**
+         * Lazy on purpose: the timezone select is hidden (v-if="false"), and
+         * building the list eagerly made this page depend on a third-party
+         * package's export shape - a failure there blanked the whole page.
+         */
+        timezoneList() {
+            return timezoneList();
+        },
+
         settings() {
             // Robust lookup: the settings state lives on the Settings page
             // component, but reaching it through a fixed number of $parent

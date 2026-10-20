@@ -54,12 +54,31 @@ function rootApp() {
                 loggedIn: false,
                 allowLoginDialog: false,
                 username: null,
+                // $root.isMobile is used all over the app (dashboard columns,
+                // the layout's mobile class, the settings sub-menu) but was
+                // never defined, so every one of those checks was dead: the
+                // desktop layout was forced on narrow screens.
+                isMobile: window.innerWidth <= 770,
             };
         },
         computed: {
 
         },
+        mounted() {
+            window.addEventListener("resize", this.updateMobile);
+        },
+        unmounted() {
+            window.removeEventListener("resize", this.updateMobile);
+        },
         methods: {
+            /**
+             * Keep the mobile flag in sync with the viewport
+             * @returns {void}
+             */
+            updateMobile() {
+                this.isMobile = window.innerWidth <= 770;
+            },
+
 
             /**
              * Show success or error toast dependant on response status code
