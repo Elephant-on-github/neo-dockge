@@ -193,12 +193,28 @@ export class DockgeServer {
         }
 
         // Static files
+        // Asset file names carry a content hash, so they can be cached hard.
+        this.app.use("/assets", (_request, response, next) => {
+            response.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+            next();
+        });
+        // The index (and everything else) must be revalidated: a cached
+        // index.html after an upgrade points at assets that no longer exist,
+        // which boots the app against a missing bundle (blank/half-broken pages).
+        this.app.use("/", (_request, response, next) => {
+            if (!response.getHeader("Cache-Control")) {
+                response.setHeader("Cache-Control", "no-cache");
+            }
+            next();
+        });
         this.app.use("/", expressStaticGzip("frontend-dist", {
             enableBrotli: true,
         }));
 
         // Universal Route Handler, must be at the end of all express routes.
         this.app.get("*", async (_request, response) => {
+            // Same reasoning as above: never let a stale SPA shell be cached.
+            response.setHeader("Cache-Control", "no-cache");
             response.send(this.indexHTML);
         });
 

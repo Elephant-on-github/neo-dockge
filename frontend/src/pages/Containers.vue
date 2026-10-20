@@ -30,7 +30,7 @@
                             <th>{{ $t("containerImage") }}</th>
                             <th>{{ $t("containerState") }}</th>
                             <th>{{ $t("managed") }}</th>
-                            <th>{{ $t("cpu") }}</th>
+                            <th>{{ $t("CPU") }}</th>
                             <th>{{ $t("memory") }}</th>
                             <th>{{ $t("memPerc") }}</th>
                             <th>{{ $t("netIO") }}</th>

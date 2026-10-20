@@ -16,6 +16,13 @@ RUN npm ci --omit=dev
 # ⭐ Main Image
 ############################################
 FROM ghcr.io/elephant-on-github/neo-dockge-base:base AS release
+
+# Set by the release workflow (VERSION=<git tag>). Lets `docker inspect` tell
+# which version an image is without running it.
+ARG VERSION=dev
+LABEL org.opencontainers.image.version=$VERSION
+LABEL org.opencontainers.image.source="https://github.com/Elephant-on-github/neo-dockge"
+
 WORKDIR /app
 COPY --chown=node:node --from=build_healthcheck /app/extra/healthcheck /app/extra/healthcheck
 COPY --from=build /app/node_modules /app/node_modules
