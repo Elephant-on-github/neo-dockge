@@ -39,7 +39,10 @@ export function getDockerEnv() : NodeJS.ProcessEnv {
     if (!apiVersion) {
         return process.env;
     }
-    return { ...process.env, DOCKER_API_VERSION: apiVersion };
+    return {
+        ...process.env,
+        DOCKER_API_VERSION: apiVersion,
+    };
 }
 
 export interface JWTDecoded {

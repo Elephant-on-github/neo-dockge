@@ -674,7 +674,7 @@ export class DockgeServer {
     async getDockerNetworkList() : Promise<string[]> {
         let res = await childProcessAsync.spawn(getDockerBinary(), [ "network", "ls", "--format", "{{.Name}}" ], {
             encoding: "utf-8",
-        env: getDockerEnv(),
+            env: getDockerEnv(),
         });
 
         if (!res.stdout) {
@@ -703,7 +703,7 @@ export class DockgeServer {
             // back silently empty.
             let res = await childProcessAsync.spawn(getDockerBinary(), [ "stats", "--no-stream", "--format", "{{json .}}" ], {
                 encoding: "utf-8",
-            env: getDockerEnv(),
+                env: getDockerEnv(),
             });
 
             if (!res.stdout) {

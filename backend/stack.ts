@@ -98,7 +98,7 @@ export class Stack {
         let res = await childProcessAsync.spawn(getDockerBinary(), this.getComposeOptions("ps", "--format", "json"), {
             cwd: this.path,
             encoding: "utf-8",
-        env: getDockerEnv(),
+            env: getDockerEnv(),
         });
         if (!res.stdout) {
             return {};
@@ -334,7 +334,7 @@ export class Stack {
         try {
             let res = await childProcessAsync.spawn(getDockerBinary(), [ "compose", "ls", "--all", "--format", "json" ], {
                 encoding: "utf-8",
-            env: getDockerEnv(),
+                env: getDockerEnv(),
             });
 
             if (!res.stdout) {
@@ -404,7 +404,7 @@ export class Stack {
         try {
             let res = await childProcessAsync.spawn(getDockerBinary(), [ "compose", "ls", "--all", "--format", "json" ], {
                 encoding: "utf-8",
-            env: getDockerEnv(),
+                env: getDockerEnv(),
             });
 
             if (!res.stdout) {
@@ -591,7 +591,7 @@ export class Stack {
         try {
             const res = await childProcessAsync.spawn(getDockerBinary(), [ "ps", "-a", "--filter", "label=com.docker.compose.project", "--format", "{{json .}}" ], {
                 encoding: "utf-8",
-            env: getDockerEnv(),
+                env: getDockerEnv(),
             });
             return this.parseContainerWarnings(res?.stdout?.toString());
         } catch (e) {
@@ -618,7 +618,7 @@ export class Stack {
         try {
             const res = await childProcessAsync.spawn(getDockerBinary(), [ "ps", "-a", "--format", "{{json .}}" ], {
                 encoding: "utf-8",
-            env: getDockerEnv(),
+                env: getDockerEnv(),
             });
             psEntries = this.parseNdjson<{ ID? : string, Names? : string, Image? : string, State? : string, Status? : string, HealthStatus? : string, Labels? : string }>(res?.stdout?.toString());
         } catch (e) {
@@ -630,7 +630,7 @@ export class Stack {
         try {
             const res = await childProcessAsync.spawn(getDockerBinary(), [ "stats", "--no-stream", "--format", "{{json .}}" ], {
                 encoding: "utf-8",
-            env: getDockerEnv(),
+                env: getDockerEnv(),
             });
             statsEntries = this.parseNdjson<{ ID? : string, Name? : string, CPUPerc? : string, MemUsage? : string, MemPerc? : string, NetIO? : string, BlockIO? : string, PIDs? : string }>(res?.stdout?.toString());
         } catch (e) {
@@ -872,7 +872,7 @@ export class Stack {
             let res = await childProcessAsync.spawn(getDockerBinary(), this.getComposeOptions("ps", "--format", "json"), {
                 cwd: this.path,
                 encoding: "utf-8",
-            env: getDockerEnv(),
+                env: getDockerEnv(),
             });
 
             if (!res.stdout) {

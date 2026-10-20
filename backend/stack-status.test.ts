@@ -816,14 +816,26 @@ describe("docker binary + api version configuration (P4 #424/#361/#935)", () => 
     const oldDockerApi = process.env.DOCKER_API_VERSION;
 
     afterEach(() => {
-        process.env.DOCKGE_DOCKER_PATH = oldPath;
-        process.env.DOCKGE_DOCKER_API_VERSION = oldApi;
-        process.env.DOCKER_PATH = oldDockerPath;
-        process.env.DOCKER_API_VERSION = oldDockerApi;
-        if (oldPath === undefined) delete process.env.DOCKGE_DOCKER_PATH;
-        if (oldApi === undefined) delete process.env.DOCKGE_DOCKER_API_VERSION;
-        if (oldDockerPath === undefined) delete process.env.DOCKER_PATH;
-        if (oldDockerApi === undefined) delete process.env.DOCKER_API_VERSION;
+        if (oldPath === undefined) {
+            delete process.env.DOCKGE_DOCKER_PATH;
+        } else {
+            process.env.DOCKGE_DOCKER_PATH = oldPath;
+        }
+        if (oldApi === undefined) {
+            delete process.env.DOCKGE_DOCKER_API_VERSION;
+        } else {
+            process.env.DOCKGE_DOCKER_API_VERSION = oldApi;
+        }
+        if (oldDockerPath === undefined) {
+            delete process.env.DOCKER_PATH;
+        } else {
+            process.env.DOCKER_PATH = oldDockerPath;
+        }
+        if (oldDockerApi === undefined) {
+            delete process.env.DOCKER_API_VERSION;
+        } else {
+            process.env.DOCKER_API_VERSION = oldDockerApi;
+        }
     });
 
     it("defaults to docker", () => {
