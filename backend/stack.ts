@@ -617,28 +617,32 @@ export class Stack {
      * @param stacksDir absolute stacks directory
      */
     static async getContainerList(stacksDir: string) : Promise<ContainerListEntry[]> {
-        let psEntries : { ID? : string, Names? : string, Image? : string, State? : string, Status? : string, HealthStatus? : string, Labels? : string }[] = [];
+        let psEntries : { ID? : string, Names? : string, Image? : string, State? : string, Status? : string, HealthStatus? : string, Labels? : string | Record<string, string> }[] = [];
         try {
             const res = await childProcessAsync.spawn(getDockerBinary(), [ "ps", "-a", "--format", "{{json .}}" ], {
                 encoding: "utf-8",
                 env: getDockerEnv(),
             });
-            psEntries = this.parseNdjson<{ ID? : string, Names? : string, Image? : string, State? : string, Status? : string, HealthStatus? : string, Labels? : string }>(res?.stdout?.toString());
+            psEntries = this.parseNdjson<{ ID? : string, Names? : string, Image? : string, State? : string, Status? : string, HealthStatus? : string, Labels? : string | Record<string, string> }>(res?.stdout?.toString());
         } catch (e) {
             log.warn("getContainerList", `Failed to list containers: ${(e as Error).message}`);
             return [];
         }
 
         let statsEntries : { ID? : string, Name? : string, CPUPerc? : string, MemUsage? : string, MemPerc? : string, NetIO? : string, BlockIO? : string, PIDs? : string }[] = [];
-        try {
-            const res = await childProcessAsync.spawn(getDockerBinary(), [ "stats", "--no-stream", "--format", "{{json .}}" ], {
-                encoding: "utf-8",
-                env: getDockerEnv(),
-            });
-            statsEntries = this.parseNdjson<{ ID? : string, Name? : string, CPUPerc? : string, MemUsage? : string, MemPerc? : string, NetIO? : string, BlockIO? : string, PIDs? : string }>(res?.stdout?.toString());
-        } catch (e) {
-            // Stats are a nice-to-have: keep the container list.
-            log.warn("getContainerList", `Failed to get container stats: ${(e as Error).message}`);
+        if (psEntries.length > 0) {
+            // No containers: skip the stats call entirely (it is the more
+            // expensive one on a busy host).
+            try {
+                const res = await childProcessAsync.spawn(getDockerBinary(), [ "stats", "--no-stream", "--format", "{{json .}}" ], {
+                    encoding: "utf-8",
+                    env: getDockerEnv(),
+                });
+                statsEntries = this.parseNdjson<{ ID? : string, Name? : string, CPUPerc? : string, MemUsage? : string, MemPerc? : string, NetIO? : string, BlockIO? : string, PIDs? : string }>(res?.stdout?.toString());
+            } catch (e) {
+                // Stats are a nice-to-have: keep the container list.
+                log.warn("getContainerList", `Failed to get container stats: ${(e as Error).message}`);
+            }
         }
 
         const statsById = new Map<string, typeof statsEntries[number]>();
@@ -714,11 +718,19 @@ export class Stack {
     }
 
     /**
-     * Parse the comma-joined `Labels` string of `docker ps` into a map.
-     * Values may contain "=", so split each entry on the first "=" only.
+     * Parse the `Labels` of a `docker ps` entry into a map. The CLI emits a
+     * comma-joined string ("k=v,k2=v2"); a future format could emit an
+     * object instead, so both are accepted. In the string form the values
+     * may contain "=", so each entry is split on the first "=" only.
      */
-    private static parseLabels(labels : string | undefined) : Map<string, string> {
+    private static parseLabels(labels : string | Record<string, string> | undefined) : Map<string, string> {
         const result = new Map<string, string>();
+        if (labels && typeof labels === "object") {
+            for (const [ key, value ] of Object.entries(labels)) {
+                result.set(key, String(value));
+            }
+            return result;
+        }
         if (typeof labels !== "string" || !labels) {
             return result;
         }
