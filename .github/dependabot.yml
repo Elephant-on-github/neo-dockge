@@ -1,0 +1,23 @@
+version: 2
+updates:
+  # Keeps the dependencies current within their existing majors
+  # (spec decision #7).
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      # One PR for the patch/minor updates instead of a dozen.
+      dependencies:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # The workflow actions are pinned to commit SHAs; dependabot updates the
+  # SHA and the version comment together.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
