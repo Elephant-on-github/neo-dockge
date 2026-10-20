@@ -863,6 +863,36 @@ describe("docker binary + api version configuration (P4 #424/#361/#935)", () => 
     });
 });
 
+describe("Stack.delete with a broken compose file (P4 #694)", () => {
+    let stacksDir: string;
+
+    beforeAll(() => {
+        stacksDir = fs.mkdtempSync(path.join(os.tmpdir(), "neo-dockge-delete-"));
+        fs.mkdirSync(path.join(stacksDir, "beta"));
+        fs.writeFileSync(path.join(stacksDir, "beta", "compose.yaml"), "services:\n  web:\n   image: nginx\n");
+    });
+
+    afterAll(() => {
+        fs.rmSync(stacksDir, { recursive: true,
+            force: true });
+    });
+
+    beforeEach(() => {
+        spawnMock.mockReset();
+        terminalExecMock.mockReset();
+    });
+
+    it("removes the stack folder even when compose down fails", async () => {
+        // A compose file with errors makes "docker compose down" fail; the
+        // stack still has to be deletable from the UI.
+        terminalExecMock.mockResolvedValue(1);
+        const stack = new Stack(fakeServer(stacksDir), "beta");
+        const socket = { endpoint: "x" } as unknown as DockgeSocket;
+        await expect(stack.delete(socket)).resolves.toBeDefined();
+        expect(fs.existsSync(path.join(stacksDir, "beta"))).toBe(false);
+    });
+});
+
 describe("Stack.isManagedByDockge resilience (final fix pass M-4)", () => {
     it("returns false instead of throwing when the folder vanishes between existsSync and statSync", () => {
         const never = path.join(os.tmpdir(), "neo-dockge-never-exists");

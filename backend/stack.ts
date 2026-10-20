@@ -237,7 +237,11 @@ export class Stack {
         const terminalName = getComposeTerminalName(socket.endpoint, this.name);
         let exitCode = await Terminal.exec(this.server, socket, terminalName, getDockerBinary(), this.getComposeOptions("down", "--remove-orphans"), this.path);
         if (exitCode !== 0) {
-            throw new Error("Failed to delete, please check the terminal output for more information.");
+            // A compose file with errors makes "docker compose down" fail, and
+            // the stack could not be deleted from the UI at all (#694). The
+            // stack folder is removed anyway; the containers may need manual
+            // cleanup, which the warning points out.
+            log.warn("delete", `Failed to bring down the stack "${this.name}" (exit code ${exitCode}), removing the stack folder anyway. Its containers may still be running.`);
         }
 
         // Remove the stack folder
