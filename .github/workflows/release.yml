@@ -67,15 +67,25 @@ jobs:
       - name: Verify the latest tag points at the released version
         env:
           VERSION: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
         run: |
           set -uo pipefail
+          # Ask the registry for the manifest digest of a tag. Done through the
+          # registry API (not `docker buildx imagetools`, which fails hard on
+          # some runners and would abort the step before the retry loop).
           digest_of() {
-            docker buildx imagetools inspect "$1" 2>/dev/null | awk '/^Digest:/ {print $2; exit}'
+            local repo="$1" tag="$2" token=""
+            token=$(curl -fsSL "https://ghcr.io/token?scope=repository:${repo}:pull&service=ghcr.io" | jq -r .token 2>/dev/null) || token=""
+            [ -n "$token" ] && [ "$token" != "null" ] || return 1
+            curl -fsSI -H "Authorization: Bearer ${token}" \
+              -H "Accept: application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.v2+json" \
+              "https://ghcr.io/v2/${repo}/manifests/${tag}" 2>/dev/null \
+              | tr -d '\r' \
+              | awk 'tolower($1) == "docker-content-digest:" {print $2; exit}'
           }
-          released=""
           for i in $(seq 1 12); do
-            released=$(digest_of "ghcr.io/${{ github.repository }}:$VERSION")
-            latest=$(digest_of "ghcr.io/${{ github.repository }}:latest")
+            released=$(digest_of "$REPO" "$VERSION" || true)
+            latest=$(digest_of "$REPO" "latest" || true)
             if [ -n "$released" ] && [ "$released" = "$latest" ]; then
               echo "latest and $VERSION both resolve to $released"
               exit 0
