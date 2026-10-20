@@ -905,6 +905,36 @@ describe("Stack.delete with a broken compose file (P4 #694)", () => {
     });
 });
 
+describe("deploy rebuilds the image (P4 #547)", () => {
+    let stacksDir: string;
+
+    beforeAll(() => {
+        stacksDir = fs.mkdtempSync(path.join(os.tmpdir(), "neo-dockge-deploy-"));
+        fs.mkdirSync(path.join(stacksDir, "beta"));
+        fs.writeFileSync(path.join(stacksDir, "beta", "compose.yaml"), "services:\n  web:\n    image: nginx\n");
+    });
+
+    afterAll(() => {
+        fs.rmSync(stacksDir, { recursive: true,
+            force: true });
+    });
+
+    beforeEach(() => {
+        spawnMock.mockReset();
+        terminalExecMock.mockReset();
+        terminalExecMock.mockResolvedValue(0);
+    });
+
+    it("passes --build so a changed Dockerfile or context is picked up", async () => {
+        const stack = new Stack(fakeServer(stacksDir), "beta");
+        const socket = { endpoint: "x" } as unknown as DockgeSocket;
+        await stack.deploy(socket);
+        const args = terminalExecMock.mock.calls[0][4] as string[];
+        expect(args).toContain("up");
+        expect(args).toContain("--build");
+    });
+});
+
 describe("Stack.isManagedByDockge resilience (final fix pass M-4)", () => {
     it("returns false instead of throwing when the folder vanishes between existsSync and statSync", () => {
         const never = path.join(os.tmpdir(), "neo-dockge-never-exists");

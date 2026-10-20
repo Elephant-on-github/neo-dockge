@@ -226,7 +226,10 @@ export class Stack {
 
     async deploy(socket : DockgeSocket) : Promise<number> {
         const terminalName = getComposeTerminalName(socket.endpoint, this.name);
-        let exitCode = await Terminal.exec(this.server, socket, terminalName, getDockerBinary(), this.getComposeOptions("up", "-d", "--remove-orphans"), this.path);
+        // --build: without it compose reuses the existing image, so a changed
+        // Dockerfile or build context was silently ignored (#547). Compose
+        // caches the layers, so this only rebuilds what actually changed.
+        let exitCode = await Terminal.exec(this.server, socket, terminalName, getDockerBinary(), this.getComposeOptions("up", "-d", "--remove-orphans", "--build"), this.path);
         if (exitCode !== 0) {
             throw new Error("Failed to deploy, please check the terminal output for more information.");
         }
