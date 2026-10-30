@@ -427,7 +427,7 @@ export class DockgeServer {
                 protect: true,  // Enabled over-run protection.
             }, () => {
                 //log.debug("server", "Cron job running");
-                this.sendStackList(true);
+                this.sendStackList(true, true);
             });
 
             checkVersion.startInterval();
@@ -640,7 +640,7 @@ export class DockgeServer {
      * Send stack list to all connected sockets
      * @param useCache
      */
-    async sendStackList(useCache = false) {
+    async sendStackList(useCache = false, respectPause = false) {
         let socketList = this.io.sockets.sockets.values();
 
         let stackList;
@@ -650,6 +650,12 @@ export class DockgeServer {
 
             // Check if the room is a number (user id)
             if (dockgeSocket.userID) {
+
+                // A user can pause the periodic (cron) refresh of the stack
+                // list; explicit calls (deploy, save, ...) ignore the pause.
+                if (respectPause && dockgeSocket.stackListAutoRefresh === false) {
+                    continue;
+                }
 
                 // Get the list only if there is a logged in user
                 if (!stackList) {
