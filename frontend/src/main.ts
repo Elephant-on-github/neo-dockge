@@ -1,7 +1,7 @@
 // Dayjs init inside this, so it has to be the first import
 import "../../common/util-common";
 
-import { createApp, defineComponent, h } from "vue";
+import { createApp, defineComponent, h, getCurrentInstance } from "vue";
 import App from "./App.vue";
 import { router } from "./router";
 import { FontAwesomeIcon } from "./icon.js";
@@ -32,6 +32,16 @@ app.use(Toast, {
     position: POSITION.BOTTOM_RIGHT,
     showCloseButtonOnHover: true,
 });
+app.config.errorHandler = (err, _instance, info) => {
+    // Surface render/lifecycle errors instead of leaving a blank page
+    // (the 1.6.4 "settings/general was blank" class of failure).
+    console.error("Vue error:", err, info);
+    try {
+        toast.error(String(err && err.message ? err.message : err));
+    } catch (e) {
+        // toast may not be available during early init; the console error stays
+    }
+};
 app.use(router);
 app.use(i18n);
 app.component("FontAwesomeIcon", FontAwesomeIcon);

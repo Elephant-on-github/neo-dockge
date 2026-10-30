@@ -14,6 +14,7 @@
             <router-link to="/" class="d-flex align-items-center mb-3 mb-md-0 me-md-auto text-dark text-decoration-none">
                 <object class="bi me-2 ms-4" width="40" height="40" data="/icon.svg" />
                 <span class="fs-4 title">neo-dockge</span>
+                <span v-if="$root.info && $root.info.version" class="badge bg-secondary ms-2 align-self-center" style="font-size: 11px;">v{{ $root.info.version }}</span>
             </router-link>
 
             <a v-if="hasNewVersion" target="_blank" href="https://github.com/Elephant-on-github/neo-dockge/releases" class="btn btn-warning me-3">

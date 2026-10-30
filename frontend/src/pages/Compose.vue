@@ -273,7 +273,7 @@ import {
 import { BModal } from "bootstrap-vue-next";
 import NetworkInput from "../components/NetworkInput.vue";
 import dotenv from "dotenv";
-import { ref } from "vue";
+import { getCurrentInstance, ref } from "vue";
 
 const template = `
 services:
@@ -349,6 +349,21 @@ export default {
             return diagnostics;
         };
 
+        const instance = getCurrentInstance();
+
+        const saveKeymap = keymap.of([{
+            key: "Mod-s",
+            run: () => {
+                const comp = instance && instance.proxy;
+                if (comp && comp.isEditMode && typeof comp.saveStack === "function") {
+                    comp.saveStack();
+                    return true;
+                }
+                return false;
+            },
+            preventDefault: true,
+        }]);
+
         const extensions = [
             editorTheme,
             yaml(),
@@ -357,6 +372,7 @@ export default {
             linter(yamlLinter, { delay: 750 }),
             search(),
             keymap.of(searchKeymap),
+            saveKeymap,
             EditorView.lineWrapping,
             EditorView.focusChangeEffect.of(focusEffectHandler),
             keymap.of([{ key: "Mod-Shift-:",
@@ -372,6 +388,7 @@ export default {
             linter(yamlLinter, { delay: 750 }),
             search(),
             keymap.of(searchKeymap),
+            saveKeymap,
             EditorView.lineWrapping,
             EditorView.focusChangeEffect.of(focusEffectHandler),
             keymap.of([{ key: "Mod-Shift-:",
