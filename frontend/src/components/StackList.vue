@@ -11,6 +11,16 @@
                 </button>
 
                 <div class="placeholder"></div>
+                <div class="form-check form-check-inline ms-2">
+                    <input
+                        id="stack-auto-refresh"
+                        v-model="autoRefresh"
+                        class="form-check-input"
+                        type="checkbox"
+                        @change="onAutoRefreshChange"
+                    />
+                    <label class="form-check-label small" for="stack-auto-refresh">{{ $t("autoRefresh") }}</label>
+                </div>
                 <div class="search-wrapper">
                     <a v-if="searchText == ''" class="search-icon">
                         <font-awesome-icon icon="search" />
@@ -101,6 +111,7 @@ export default {
             disableSelectAllWatcher: false,
             selectedStacks: {},
             windowTop: 0,
+            autoRefresh: true,
             filterState: {
                 status: null,
                 active: null,
@@ -305,6 +316,12 @@ export default {
         window.removeEventListener("resize", this.onScroll);
     },
     methods: {
+        onAutoRefreshChange() {
+            const socket = this.$root.getSocket();
+            if (socket) {
+                socket.emit("setStackListAutoRefresh", this.autoRefresh);
+            }
+        },
         /**
          * Handle user scroll
          * @returns {void}

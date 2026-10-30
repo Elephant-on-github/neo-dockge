@@ -240,6 +240,17 @@ export class DockerSocketHandler extends AgentSocketHandler {
             }
         });
 
+        // Pause/resume the periodic refresh of the stack list for this socket
+        agentSocket.on("setStackListAutoRefresh", async (enabled : unknown, callback) => {
+            try {
+                checkLogin(socket);
+                (socket as DockgeSocket).stackListAutoRefresh = enabled === true;
+                callbackResult({ ok: true }, callback);
+            } catch (e) {
+                callbackError(e, callback);
+            }
+        });
+
         // Docker stats
         agentSocket.on("dockerStats", async (callback) => {
             try {

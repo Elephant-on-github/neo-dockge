@@ -56,6 +56,7 @@ export interface DockgeSocket extends Socket {
     instanceManager : AgentManager;
     endpoint : string;
     emitAgent : (eventName : string, ...args : unknown[]) => void;
+    stackListAutoRefresh? : boolean;
 }
 
 // For command line arguments, so they are nullable
