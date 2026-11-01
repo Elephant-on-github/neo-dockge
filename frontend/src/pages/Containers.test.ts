@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, expect, it, vi } from "vitest";
 import { mountWithRoot } from "../test-utils";
 import Containers from "../pages/Containers.vue";
@@ -9,11 +10,20 @@ describe("Containers.vue", () => {
     });
 
     it("refresh populates containerList from the socket response", () => {
-        const socket = { emit: vi.fn(), on: vi.fn(), token: "autoLogin", connected: true };
+        const socket = { emit: vi.fn(),
+            on: vi.fn(),
+            token: "autoLogin",
+            connected: true };
         const emitAgent = vi.fn((_ep: string, _ev: string, cb: (r: any) => void) => {
-            cb({ ok: true, containerList: [{ id: "abc", name: "web", state: "running", managed: true, cpu: "1%" }] });
+            cb({ ok: true,
+                containerList: [{ id: "abc",
+                    name: "web",
+                    state: "running",
+                    managed: true,
+                    cpu: "1%" }] });
         });
-        const wrapper = mountWithRoot(Containers, { rootOverrides: { emitAgent, getSocket: () => socket } });
+        const wrapper = mountWithRoot(Containers, { rootOverrides: { emitAgent,
+            getSocket: () => socket } });
         const vm = wrapper.vm as any;
         vm.refresh();
         expect(vm.containerList.length).toBe(1);
@@ -42,3 +52,4 @@ describe("Containers.vue", () => {
         vi.useRealTimers();
     });
 });
+

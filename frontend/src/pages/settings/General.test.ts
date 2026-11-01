@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, expect, it, vi } from "vitest";
 import { mountWithRoot } from "../../test-utils";
 import General from "../../components/settings/General.vue";
@@ -25,3 +26,4 @@ describe("General.vue", () => {
         expect(saveSettings).toHaveBeenCalled();
     });
 });
+

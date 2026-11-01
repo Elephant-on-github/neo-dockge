@@ -84,7 +84,7 @@ export default defineComponent({
          * @returns {string}
          */
         frontendVersion() {
-            // eslint-disable-next-line no-undef
+
             return FRONTEND_VERSION;
         },
 

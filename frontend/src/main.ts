@@ -89,7 +89,6 @@ function rootApp() {
                 this.isMobile = window.innerWidth <= 770;
             },
 
-
             /**
              * Show success or error toast dependant on response status code
              * @param {object} res Response object

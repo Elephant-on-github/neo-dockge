@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, expect, it } from "vitest";
 import { mountWithRoot } from "../test-utils";
 import DashboardHome from "../pages/DashboardHome.vue";
@@ -20,3 +21,4 @@ describe.skip("DashboardHome.vue", () => {
         expect(vm.inactiveNum).toBe(1);
     });
 });
+

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // Shared helpers for mounting Vue components in tests.
 import { mount } from "@vue/test-utils";
 import { vi } from "vitest";
@@ -35,7 +36,10 @@ export function makeRootMock(overrides: RootMockOptions = {}) {
         ...overrides.getSocket?.(),
     };
     const root = {
-        info: { version: "1.6.5", latestVersion: null, isContainer: false, ...(overrides.info || {}) },
+        info: { version: "1.6.5",
+            latestVersion: null,
+            isContainer: false,
+            ...(overrides.info || {}) },
         isMobile: overrides.isMobile ?? false,
         loggedIn: overrides.loggedIn ?? true,
         username: overrides.username ?? "admin",
@@ -50,8 +54,12 @@ export function makeRootMock(overrides: RootMockOptions = {}) {
         toastRes: overrides.toastRes ?? vi.fn(),
         toastSuccess: overrides.toastSuccess ?? vi.fn(),
         toastError: overrides.toastError ?? vi.fn(),
-        socketIO: overrides.socketIO ?? { connected: true, firstConnect: true, connectionErrorMsg: "", showReverseProxyGuide: false },
-        socket: overrides.socketIO ?? { token: "autoLogin", connected: true },
+        socketIO: overrides.socketIO ?? { connected: true,
+            firstConnect: true,
+            connectionErrorMsg: "",
+            showReverseProxyGuide: false },
+        socket: overrides.socketIO ?? { token: "autoLogin",
+            connected: true },
         userTimezone: overrides.userTimezone ?? "auto",
         settings: overrides.settings,
         saveSettings: overrides.saveSettings,
@@ -62,8 +70,12 @@ export function makeRootMock(overrides: RootMockOptions = {}) {
 
 export function mountWithRoot(component: Component, options: Record<string, unknown> = {}) {
     const root = makeRootMock((options.rootOverrides as RootMockOptions) || {});
-    const route = (options.route as any) || { params: {}, path: "/", name: "DashboardHome", fullPath: "/" };
-    const router = (options.router as any) || { push: vi.fn(), currentRoute: { value: route } };
+    const route = (options.route as any) || { params: {},
+        path: "/",
+        name: "DashboardHome",
+        fullPath: "/" };
+    const router = (options.router as any) || { push: vi.fn(),
+        currentRoute: { value: route } };
     const wrapper = mount(component, {
         ...options,
         global: {
@@ -84,8 +96,10 @@ export function mountWithRoot(component: Component, options: Record<string, unkn
                             try {
                                 const props = (this.$options && this.$options.props) ? Object.keys(this.$options.props) : [];
                                 const safe: Record<string, unknown> = {};
-                                for (const [k, v] of Object.entries(root)) {
-                                    if (!props.includes(k)) safe[k] = v;
+                                for (const [ k, v ] of Object.entries(root)) {
+                                    if (!props.includes(k)) {
+                                        safe[k] = v;
+                                    }
                                 }
                                 Object.assign(this, safe);
                             } catch (e) {
@@ -101,7 +115,9 @@ export function mountWithRoot(component: Component, options: Record<string, unkn
                             if (inst && inst.proxy) {
                                 inst.proxy = new Proxy(inst.proxy, {
                                     get(target, key) {
-                                        if (key === "$root") return root;
+                                        if (key === "$root") {
+                                            return root;
+                                        }
                                         return target[key];
                                     },
                                 });
@@ -130,3 +146,4 @@ export function mountWithRoot(component: Component, options: Record<string, unkn
     });
     return wrapper;
 }
+

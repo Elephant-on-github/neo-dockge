@@ -9,7 +9,7 @@ export default defineConfig({
     plugins: [
         vue(),
         Components({
-            resolvers: [BootstrapVueNextResolver()],
+            resolvers: [ BootstrapVueNextResolver() ],
         }),
     ],
     resolve: {
@@ -21,7 +21,7 @@ export default defineConfig({
     test: {
         environment: "jsdom",
         globals: true,
-        setupFiles: ["./src/test-setup.ts"],
-        include: ["src/**/*.test.ts"],
+        setupFiles: [ "./src/test-setup.ts" ],
+        include: [ "src/**/*.test.ts" ],
     },
 });
