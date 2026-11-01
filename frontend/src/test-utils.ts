@@ -19,6 +19,7 @@ export interface RootMockOptions {
     toastRes?: (...args: unknown[]) => void;
     toastSuccess?: (...args: unknown[]) => void;
     toastError?: (...args: unknown[]) => void;
+    unbindTerminal?: (...args: unknown[]) => void;
     socketIO?: Record<string, unknown>;
     userTimezone?: string;
     settings?: Record<string, unknown>;
@@ -54,6 +55,7 @@ export function makeRootMock(overrides: RootMockOptions = {}) {
         toastRes: overrides.toastRes ?? vi.fn(),
         toastSuccess: overrides.toastSuccess ?? vi.fn(),
         toastError: overrides.toastError ?? vi.fn(),
+        unbindTerminal: overrides.unbindTerminal ?? vi.fn(),
         socketIO: overrides.socketIO ?? { connected: true,
             firstConnect: true,
             connectionErrorMsg: "",

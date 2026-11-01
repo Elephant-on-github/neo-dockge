@@ -2,15 +2,15 @@
 import { describe, expect, it } from "vitest";
 import { mountWithRoot } from "../test-utils";
 import DashboardHome from "../pages/DashboardHome.vue";
-import { RUNNING, EXITED, UNKNOWN } from "@common/util-common";
+import { RUNNING, EXITED, CREATED_FILE } from "@common/util-common";
 
-describe.skip("DashboardHome.vue", () => {
+describe("DashboardHome.vue", () => {
     it("getStatusNum counts stacks by statusNameShort", () => {
         const completeStackList = {
             a: { status: RUNNING },
             b: { status: RUNNING },
             c: { status: EXITED },
-            d: { status: UNKNOWN },
+            d: { status: CREATED_FILE },
         };
         const wrapper = mountWithRoot(DashboardHome, { rootOverrides: { completeStackList } });
         const vm = wrapper.vm as any;
