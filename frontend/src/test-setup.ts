@@ -12,6 +12,29 @@ library.add(
 );
 config.global.components = { FontAwesomeIcon };
 
+// jsdom does not implement localStorage; the i18n module reads it on import.
+if (typeof window.localStorage === "undefined" || typeof window.localStorage.getItem !== "function") {
+    const store: Record<string, string> = {};
+    window.localStorage = {
+        getItem: (key: string) => (key in store ? store[key] : null),
+        setItem: (key: string, value: string) => {
+            store[key] = String(value);
+        },
+        removeItem: (key: string) => {
+            delete store[key];
+        },
+        clear: () => {
+            for (const k in store) {
+                delete store[k];
+            }
+        },
+        key: (i: number) => Object.keys(store)[i] ?? null,
+        get length() {
+            return Object.keys(store).length;
+        },
+    } as Storage;
+}
+
 // jsdom does not implement matchMedia; the theme mixin reads it on init.
 if (typeof window.matchMedia !== "function") {
     window.matchMedia = (query: string) => ({
