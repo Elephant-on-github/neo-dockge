@@ -21,6 +21,11 @@
                         {{ $t("saveStackDraft") }}
                     </button>
 
+                    <button v-if="isEditMode" class="btn btn-normal" :disabled="processing" @click="copyCompose">
+                        <font-awesome-icon icon="copy" class="me-1" />
+                        {{ $t("copyCompose") }}
+                    </button>
+
                     <button v-if="!isEditMode" class="btn btn-secondary" :disabled="processing" @click="enableEditMode">
                         <font-awesome-icon icon="pen" class="me-1" />
                         {{ $t("editStack") }}
@@ -130,6 +135,10 @@
                             :first="name === Object.keys(jsonConfig.services)[0]"
                             :serviceStatus="serviceStatusList[name]"
                             :dockerStats="dockerStats"
+                            :endpoint="endpoint"
+                            :stack="stack"
+                            :jsonConfig="jsonConfig"
+                            :envsubstJSONConfig="envsubstJSONConfig"
                             @start-service="startService"
                             @stop-service="stopService"
                             @restart-service="restartService"
@@ -735,6 +744,29 @@ export default {
                     this.$router.push(this.url);
                 }
             });
+        },
+
+        copyCompose() {
+            const text = this.stack.composeYAML || "";
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(() => {
+                    this.$root.toastSuccess(this.$t("copied"));
+                }).catch(() => {
+                    this.$root.toastError(this.$t("copyFailed"));
+                });
+            } else {
+                const ta = document.createElement("textarea");
+                ta.value = text;
+                document.body.appendChild(ta);
+                ta.select();
+                try {
+                    document.execCommand("copy");
+                    this.$root.toastSuccess(this.$t("copied"));
+                } catch (e) {
+                    this.$root.toastError(this.$t("copyFailed"));
+                }
+                document.body.removeChild(ta);
+            }
         },
 
         startStack() {

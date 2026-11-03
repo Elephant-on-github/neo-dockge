@@ -220,6 +220,22 @@ export default defineComponent({
         dockerStats: {
             type: Object,
             default: null
+        },
+        endpoint: {
+            type: String,
+            default: ""
+        },
+        stack: {
+            type: Object,
+            default: () => ({})
+        },
+        jsonConfig: {
+            type: Object,
+            default: () => ({ services: {} })
+        },
+        envsubstJSONConfig: {
+            type: Object,
+            default: () => ({ services: {} })
         }
     },
     emits: [
@@ -278,16 +294,8 @@ export default defineComponent({
             }
         },
 
-        endpoint() {
-            return this.$parent.$parent.endpoint;
-        },
-
-        stack() {
-            return this.$parent.$parent.stack;
-        },
-
         stackName() {
-            return this.$parent.$parent.stack.name;
+            return this.stack.name;
         },
 
         service() {
@@ -302,18 +310,18 @@ export default defineComponent({
         },
 
         jsonObject() {
-            return this.$parent.$parent.jsonConfig;
+            return this.jsonConfig;
         },
 
-        envsubstJSONConfig() {
-            return this.$parent.$parent.envsubstJSONConfig;
+        envsubstConfig() {
+            return this.envsubstJSONConfig;
         },
 
         envsubstService() {
-            if (!this.envsubstJSONConfig.services[this.name]) {
+            if (!this.envsubstConfig.services[this.name]) {
                 return {};
             }
-            return this.envsubstJSONConfig.services[this.name];
+            return this.envsubstConfig.services[this.name];
         },
 
         imageName() {
@@ -338,7 +346,7 @@ export default defineComponent({
             }
         },
         statsInstances() {
-            if (!this.serviceStatus) {
+            if (!this.serviceStatus || !this.dockerStats) {
                 return [];
             }
 

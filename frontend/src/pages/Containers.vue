@@ -23,6 +23,17 @@
             </div>
 
             <div v-else class="table-responsive">
+                <div class="d-flex align-items-center mb-3 gap-2 flex-wrap">
+                    <input v-model="filterText" type="text" class="form-control form-control-sm" style="max-width: 240px" :placeholder="$t('search')" />
+                    <select v-model="sortBy" class="form-select form-select-sm" style="max-width: 160px">
+                        <option value="name">{{ $t('containerName') }}</option>
+                        <option value="state">{{ $t('containerState') }}</option>
+                        <option value="cpu">{{ $t('CPU') }}</option>
+                    </select>
+                    <button class="btn btn-sm btn-outline-secondary" @click="sortDir = sortDir === 'asc' ? 'desc' : 'asc'">
+                        {{ sortDir === 'asc' ? '↑' : '↓' }}
+                    </button>
+                </div>
                 <table class="table table-hover align-middle">
                     <thead>
                         <tr>
@@ -39,7 +50,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        <tr v-for="container in containerList" :key="container.id + container.name">
+                        <tr v-for="container in filteredContainers" :key="container.id + container.name">
                             <td>{{ container.name }}</td>
                             <td>{{ container.image }}</td>
                             <td>
@@ -72,11 +83,33 @@ export default {
             loading: true,
             autoRefresh: true,
             refreshTimer: null,
+            filterText: "",
+            sortBy: "name",
+            sortDir: "asc",
         };
     },
     computed: {
         endpoint() {
             return this.$route.params.endpoint || "";
+        },
+        filteredContainers() {
+            const q = (this.filterText || "").toLowerCase();
+            let list = this.containerList.filter((c) =>
+                !q || (c.name || "").toLowerCase().includes(q) || (c.image || "").toLowerCase().includes(q),
+            );
+            const dir = this.sortDir === "asc" ? 1 : -1;
+            list = list.slice().sort((a, b) => {
+                const va = a[this.sortBy] ?? "";
+                const vb = b[this.sortBy] ?? "";
+                if (va < vb) {
+                    return -1 * dir;
+                }
+                if (va > vb) {
+                    return 1 * dir;
+                }
+                return 0;
+            });
+            return list;
         },
     },
     mounted() {

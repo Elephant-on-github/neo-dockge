@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { mountWithRoot } from "../test-utils";
 import Container from "../components/Container.vue";
 
-describe.skip("Container.vue", () => {
+describe("Container.vue", () => {
     it("status returns serviceStatus[0].status", () => {
         const wrapper = mountWithRoot(Container, { props: { name: "web",
             serviceStatus: [{ status: "running" }, { status: "exited" }] } });
